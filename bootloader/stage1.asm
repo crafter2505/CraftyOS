@@ -2,7 +2,7 @@ BITS 16
 ORG 0x7C00
 
 STAGE2_ADDR equ 0x7E00
-STAGE2_SECTORS equ 2
+STAGE2_SECTORS equ 34
 
 start:
     cli
@@ -10,9 +10,7 @@ start:
     mov ds, ax
     mov es, ax
     mov ss, ax
-    mov sp, 0x7c00
-    sti
-
+    mov sp, 0x7C00
     mov [boot_drive], dl
 
     mov si, msg_loading
