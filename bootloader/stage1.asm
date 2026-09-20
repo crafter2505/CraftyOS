@@ -2,7 +2,7 @@ BITS 16
 ORG 0x7C00
 
 STAGE2_ADDR equ 0x7E00
-STAGE2_SECTORS equ 34
+STAGE2_SECTORS equ 80
 
 start:
     cli
