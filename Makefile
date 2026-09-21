@@ -10,12 +10,13 @@ LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 IMG        := CraftyOS.img
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
-KERNEL_C   := kernel/kernel.c
-KERNEL_LD  := kernel/linker.ld
+
+KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c
+KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_SRCS))
+KERNEL_LD   := kernel/linker.ld
 
 STAGE1_BIN := build/stage1.bin
 STAGE2_BIN := build/stage2.bin
-KERNEL_O   := build/kernel.o
 KERNEL_ELF := build/kernel.elf
 
 KERNEL_SECTOR := 40
@@ -23,7 +24,7 @@ KERNEL_SECTOR := 40
 all: $(IMG)
 
 build:
-	mkdir -p build
+	mkdir -p build build/kernel
 
 $(STAGE1_BIN): $(STAGE1) | build
 	$(ASM) $(ASMFLAGS) $< -o $@
@@ -31,11 +32,11 @@ $(STAGE1_BIN): $(STAGE1) | build
 $(STAGE2_BIN): $(STAGE2) bootloader/gdt.asm bootloader/paging.asm | build
 	$(ASM) $(ASMFLAGS) $< -o $@
 
-$(KERNEL_O): $(KERNEL_C) | build
+build/kernel/%.o: kernel/%.c | build
 	$(CC) $(CFLAGS) $< -o $@
 
-$(KERNEL_ELF): $(KERNEL_O) $(KERNEL_LD)
-	$(LD) $(LDFLAGS) -o $@ $(KERNEL_O)
+$(KERNEL_ELF): $(KERNEL_OBJS) $(KERNEL_LD)
+	$(LD) $(LDFLAGS) -o $@ $(KERNEL_OBJS)
 
 $(IMG): $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_ELF)
 	dd if=/dev/zero of=$@ bs=512 count=2880 2>/dev/null

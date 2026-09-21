@@ -1,19 +1,39 @@
-#define VGA_WIDTH 80
-#define VGA_HEIGHT 25
-#define VGA_MEMORY ((volatile unsigned short *)0xB8000)
-#define VGA_ATTR 0x0F
+#include "terminal.h"
+#include "kprintf.h"
 
 void _start(void) {
-    volatile unsigned short *vga = VGA_MEMORY;
-    for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-        vga[i] = (unsigned short)' ' | ((unsigned short)0x07 << 8);
-    }
+    terminal_init();
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
 
-    const char *msg = "Hello from C kernel! CraftyOS lives.";
-    for (int i = 0; msg[i] != '\0'; i++) {
-        vga[i] = (unsigned short)msg[i] | ((unsigned short)VGA_ATTR << 8);
-    }
+    terminal_clear();
 
+    kprintf("craftyOS v0.6\n");
+    kprintf("=======================\n\n");
+
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    kprintf("[OK] ");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+    kprintf("VGA driver initialized\n");
+
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    kprintf("[OK] ");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+    kprintf("kprintf working\n\n");
+
+    kprintf("Format tests:\n");
+    kprintf("  char:     %c\n", 'A');
+    kprintf("  string:   %s\n", "hello, craftyOS");
+    kprintf("  decimal:  %d\n", 12345);
+    kprintf("  negative: %d\n", -42);
+    kprintf("  unsigned: %u\n", 4000000000u);
+    kprintf("  hex:      0x%x\n", 0xDEADBEEF);
+    kprintf("  HEX:      0x%X\n", 0xCAFEBABE);
+    kprintf("  percent:  100%%\n");
+
+    kprintf("\nScroll test:\n");
+    for (int i = 0; i < 20; i++) {
+        kprintf("  line %d\n", i);
+    }
     for (;;) {
         __asm__ volatile ("hlt");
     }

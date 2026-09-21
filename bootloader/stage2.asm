@@ -101,7 +101,7 @@ long_mode_entry:
 .load_kernel:
     mov rdi, 0x200000
     mov esi, 40
-    mov edx, 18
+    mov edx, 40
     call ata_read_sectors
 
     mov rsi, msg_kernel
