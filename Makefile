@@ -11,8 +11,8 @@ IMG        := CraftyOS.img
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
 
-KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c
-KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_SRCS))
+KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c
+KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_SRCS)) build/kernel/interrupts.o
 KERNEL_LD   := kernel/linker.ld
 
 STAGE1_BIN := build/stage1.bin
@@ -34,6 +34,9 @@ $(STAGE2_BIN): $(STAGE2) bootloader/gdt.asm bootloader/paging.asm | build
 
 build/kernel/%.o: kernel/%.c | build
 	$(CC) $(CFLAGS) $< -o $@
+
+build/kernel/interrupts.o: kernel/interrupts.asm | build
+	$(ASM) -f elf64 $< -o $@
 
 $(KERNEL_ELF): $(KERNEL_OBJS) $(KERNEL_LD)
 	$(LD) $(LDFLAGS) -o $@ $(KERNEL_OBJS)
