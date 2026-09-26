@@ -3,6 +3,7 @@
 #include "kprintf.h"
 #include "terminal.h"
 #include "types.h"
+#include "line.h"
 
 #define KEYBOARD_DATA_PORT 0x60
 
@@ -48,7 +49,7 @@ void keyboard_handler(void) {
         char c = shift_held ? scancode_to_ascii_shift[scancode]
                             : scancode_to_ascii[scancode];
         if (c) {
-            terminal_putchar(c);
+            line_putchar(c);
         }
     }
 }

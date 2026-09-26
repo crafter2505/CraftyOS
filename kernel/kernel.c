@@ -3,6 +3,7 @@
 #include "pic.h"
 #include "idt.h"
 #include "timer.h"
+#include "line.h"
 #include "keyboard.h"
 
 void _start(void) {
@@ -10,7 +11,7 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.7\n");
+    kprintf("craftyOS v0.8\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -47,6 +48,12 @@ void _start(void) {
     kprintf("[OK] ");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     kprintf("Keyboard initialized\n");
+
+    line_init();
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    kprintf("[OK] ");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+    kprintf("Line editor ready\n");
 
     pic_clear_mask(0);
     pic_clear_mask(1);
