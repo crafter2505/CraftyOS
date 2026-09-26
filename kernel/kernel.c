@@ -2,6 +2,8 @@
 #include "kprintf.h"
 #include "pic.h"
 #include "idt.h"
+#include "timer.h"
+#include "keyboard.h"
 
 void _start(void) {
     terminal_init();
@@ -33,10 +35,28 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     kprintf("IDT loaded\n");
 
-    kprintf("\nTesting interrupt handling with int 3 (breakpoint)...\n");
-    __asm__ volatile ("int $3");
+    timer_init(100);
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    kprintf("[OK] ");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+    kprintf("Timer initialized at 100 Hz\n");
 
-    kprintf("Returned from int 3 — dispatcher works!\n");
+
+    keyboard_init();
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    kprintf("[OK] ");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+    kprintf("Keyboard initialized\n");
+
+    pic_clear_mask(0);
+    pic_clear_mask(1);
+
+    kprintf("\n");
+    kprintf("craftyOS> ");
+
+    
+    
+    __asm__ volatile ("sti");
 
     for (;;) {
         __asm__ volatile ("hlt");

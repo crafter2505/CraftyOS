@@ -11,7 +11,7 @@ IMG        := CraftyOS.img
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
 
-KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c
+KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c
 KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_SRCS)) build/kernel/interrupts.o
 KERNEL_LD   := kernel/linker.ld
 
