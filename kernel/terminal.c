@@ -40,6 +40,13 @@ void terminal_putchar(char c) {
         cursor_row++;
     } else if (c == '\r') {
         cursor_col = 0;
+    } else if (c == '\b') {
+        if (cursor_col > 0) {
+            cursor_col--;
+        } else if (cursor_row > 0) {
+            cursor_row--;
+            cursor_col = VGA_WIDTH - 1;
+        }
     } else if (c == '\t') {
         cursor_col = (cursor_col + 4) & ~3;
         if (cursor_col >= VGA_WIDTH) {
