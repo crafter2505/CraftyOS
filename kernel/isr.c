@@ -2,6 +2,9 @@
 #include "kprintf.h"
 #include "terminal.h"
 #include "pic.h"
+#include "timer.h"
+#include "keyboard.h"
+
 
 static const char *exception_names[] = {
     "Divide Error",
@@ -34,7 +37,7 @@ static const char *exception_names[] = {
 };
 
 void isr_handler(uint64_t int_no, uint64_t err_code, struct registers *regs) {
-    if (int_no < 32) {   
+    if (int_no < 32) {
         terminal_set_color(VGA_LIGHT_RED, VGA_BLACK);
         kprintf("\n[EXCEPTION] ");
         terminal_set_color(VGA_WHITE, VGA_BLACK);
@@ -52,7 +55,17 @@ void isr_handler(uint64_t int_no, uint64_t err_code, struct registers *regs) {
         }
     } else if (int_no < 48) {
         uint64_t irq = int_no - 32;
-        kprintf("[IRQ %d]\n", (int)irq);
+
+        switch (irq) {
+        case 0:
+            timer_tick();
+            break;
+        case 1:  
+            keyboard_handler();
+            break;
+        default:
+            break;
+        }
 
         pic_send_eoi((unsigned char)irq);
     } else {
