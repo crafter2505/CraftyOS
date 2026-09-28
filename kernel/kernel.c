@@ -3,15 +3,16 @@
 #include "pic.h"
 #include "idt.h"
 #include "timer.h"
-#include "line.h"
 #include "keyboard.h"
+#include "line.h"
+#include "memory_map.h"
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.8\n");
+    kprintf("craftyOS v0.8.1\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -42,12 +43,13 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     kprintf("Timer initialized at 100 Hz\n");
 
-
     keyboard_init();
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
     kprintf("[OK] ");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     kprintf("Keyboard initialized\n");
+
+    memory_map_dump();
 
     line_init();
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -61,8 +63,6 @@ void _start(void) {
     kprintf("\n");
     kprintf("craftyOS> ");
 
-    
-    
     __asm__ volatile ("sti");
 
     for (;;) {

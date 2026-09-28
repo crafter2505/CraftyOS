@@ -14,8 +14,9 @@ start:
 
     mov si, msg_real
     call print_string_bios
-    cli
+    call detect_memory
 
+    cli
   
     lgdt [gdt_descriptor]
 
@@ -27,6 +28,7 @@ start:
 
 print_string_bios:
     mov ah, 0x0E
+
 .next:
     lodsb
     cmp al, 0
@@ -36,6 +38,56 @@ print_string_bios:
 .done:
     ret
 
+E820_COUNT_ADDR    equ 0x500
+E820_CONTINUATION  equ 0x504
+E820_ENTRIES       equ 0x508
+E820_ENTRY_SIZE    equ 24
+
+detect_memory:
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push es
+
+    mov ax, 0
+    mov es, ax
+    mov di, E820_ENTRIES
+
+    mov dword [E820_COUNT_ADDR], 0
+    mov dword [E820_CONTINUATION], 0
+
+.next_entry:
+    mov eax, 0xE820
+    mov edx, 0x534D4150
+    mov ecx, E820_ENTRY_SIZE
+    mov ebx, [E820_CONTINUATION]
+
+    int 0x15
+
+    jc .done
+    cmp eax, 0x534D4150
+    jne .done
+
+    inc dword [E820_COUNT_ADDR]
+    mov [E820_CONTINUATION], ebx
+
+    add di, E820_ENTRY_SIZE
+
+    test ebx, ebx
+    jz .done
+    jmp .next_entry
+
+.done:
+    pop es
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
 msg_real: db "Stage2: entering long mode...", 13, 10, 0
 
 %include "bootloader/gdt.asm"
@@ -43,7 +95,6 @@ msg_real: db "Stage2: entering long mode...", 13, 10, 0
 
 BITS 32
 protected_mode_entry:
-    ; Reload data segment registers with the data selector (0x18)
     mov ax, 0x18
     mov ds, ax
     mov es, ax
@@ -51,7 +102,6 @@ protected_mode_entry:
     mov gs, ax
     mov ss, ax
 
-    ; Set up 32-bit stack
     mov esp, 0x90000
 
     mov eax, pml4_table
@@ -101,7 +151,7 @@ long_mode_entry:
 .load_kernel:
     mov rdi, 0x200000
     mov esi, 40
-    mov edx, 40
+    mov edx, 58
     call ata_read_sectors
 
     mov rsi, msg_kernel
