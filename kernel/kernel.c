@@ -6,13 +6,14 @@
 #include "keyboard.h"
 #include "line.h"
 #include "memory_map.h"
+#include "pmm.h"
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.8.1\n");
+    kprintf("craftyOS v0.8.2\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -50,6 +51,8 @@ void _start(void) {
     kprintf("Keyboard initialized\n");
 
     memory_map_dump();
+
+    pmm_init();
 
     line_init();
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
