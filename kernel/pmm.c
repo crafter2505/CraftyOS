@@ -22,6 +22,8 @@ static inline int bitmap_test(uint64_t page) {
     return bitmap[page / 8] & (1 << (page % 8));
 }
 
+static uint64_t last_alloc_hint = 0;
+
 static void pmm_mark_used(uint64_t base, uint64_t size) {
     uint64_t start = base / PAGE_SIZE;
     uint64_t end = (base + size + PAGE_SIZE - 1) / PAGE_SIZE;
@@ -35,14 +37,58 @@ static void pmm_mark_used(uint64_t base, uint64_t size) {
 }
 
 static void pmm_mark_free(uint64_t base, uint64_t size) {
-    uint64_t start = base / PAGE_SIZE;
-    uint64_t end = (base + size + PAGE_SIZE - 1) / PAGE_SIZE;
+    uint64_t start = (base / PAGE_SIZE - 1) / PAGE_SIZE;
+    uint64_t end = (base + size) / PAGE_SIZE;
 
     for (uint64_t p = start; p < end && p < PMM_MAX_PAGES; p++) {
         if (bitmap_test(p)) {
             bitmap_clear(p);
             free_pages++;
         }
+    }
+}
+
+void *pmm_alloc_page(void) {
+    if (free_pages == 0) {
+        return 0;
+    }
+
+    for (int pass = 0; pass < 2; pass++) {
+        uint64_t start = (pass == 0) ? last_alloc_hint : 0;
+        uint64_t end = (pass == 0) ? PMM_ALLOC_LIMIT : last_alloc_hint;
+
+        if (start >= PMM_ALLOC_LIMIT) {
+            continue;
+        }
+
+        for (uint64_t p = start; p < end; p++) {
+            if (!bitmap_test(p)) {
+                bitmap_set(p);
+                free_pages--;
+                last_alloc_hint = p + 1;
+                return (void *)(p * PAGE_SIZE);
+            }
+        }
+    }
+    return 0;
+}
+
+void pmm_free_page(void *addr) {
+    uint64_t page = (uint64_t)addr / PAGE_SIZE;
+
+    if (page >= PMM_MAX_PAGES) {
+        return;
+    }
+
+    if (!bitmap_test(page)) {
+        return;
+    }
+
+    bitmap_clear(page);
+    free_pages++;
+
+    if (page < last_alloc_hint) {
+        last_alloc_hint = page;
     }
 }
 
