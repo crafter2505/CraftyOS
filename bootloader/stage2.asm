@@ -1,6 +1,8 @@
 BITS 16
 ORG 0x7E00
 
+KERNEL_ELF_BUFFER equ 0x400000
+
 stage2_start:
 
 start:
@@ -258,7 +260,7 @@ long_mode_entry:
     jmp .print1
 
 .load_kernel:
-    mov rdi, 0x200000
+    mov rdi, KERNEL_ELF_BUFFER
     mov esi, 40
     mov edx, 58
     call ata_read_sectors
@@ -277,12 +279,12 @@ long_mode_entry:
     jmp .print2
 
 .parse_elf:
-    mov r15, [0x200000 + 24]
-    mov r13, [0x200000 + 32]
-    movzx r14, word [0x200000 + 54]
-    movzx r12, word [0x200000 + 56]
+    mov r15, [KERNEL_ELF_BUFFER + 24]
+    mov r13, [KERNEL_ELF_BUFFER + 32]
+    movzx r14, word [KERNEL_ELF_BUFFER + 54]
+    movzx r12, word [KERNEL_ELF_BUFFER + 56]
 
-    lea rbx, [0x200000 + r13]
+    lea rbx, [KERNEL_ELF_BUFFER + r13]
 
 .segment_loop:
     test r12, r12
@@ -296,7 +298,7 @@ long_mode_entry:
     mov r9, [rbx + 16]
     mov rcx, [rbx + 32]
 
-    lea rsi, [0x200000 + r8]
+    lea rsi, [KERNEL_ELF_BUFFER + r8]
     mov rdi, r9
     cld
     rep movsb

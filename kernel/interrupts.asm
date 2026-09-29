@@ -17,10 +17,6 @@ isr%1:
     jmp isr_common
 %endmacro
 
-; ---------------------------------------------------------------
-; The 32 CPU exceptions
-; Vectors 8, 10-14, 17, 21 push an error code; the rest do not.
-; ---------------------------------------------------------------
 ISR_NOERR 0     ; Divide Error
 ISR_NOERR 1     ; Debug
 ISR_NOERR 2     ; NMI

@@ -45,6 +45,15 @@ void keyboard_handler(void) {
         return;
     }
 
+    if (scancode == 0x49) {
+        terminal_scrollback_up(5);
+        return;
+    }
+    if (scancode == 0x51) {
+        terminal_scrollback_down(5);
+        return;
+    }
+
     if (scancode < sizeof(scancode_to_ascii)) {
         char c = shift_held ? scancode_to_ascii_shift[scancode]
                             : scancode_to_ascii[scancode];

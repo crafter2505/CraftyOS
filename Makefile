@@ -12,7 +12,7 @@ LOG 	   := qemu.log
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
 
-KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c kernel/line.c kernel/memory_map.c kernel/pmm.c
+KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c kernel/line.c kernel/memory_map.c kernel/pmm.c kernel/fault.c
 KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_SRCS)) build/kernel/interrupts.o
 KERNEL_LD   := kernel/linker.ld
 

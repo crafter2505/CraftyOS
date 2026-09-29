@@ -61,22 +61,22 @@ void kprintf(const char *fmt, ...) {
             break;
         }
         case 'd': {
-            long d = (long)va_arg(args, int);
+            long d = va_arg(args, long);
             print_int(d);
             break;
         }
         case 'u': {
-            unsigned long u = (unsigned long)va_arg(args, unsigned int);
+            unsigned long u = va_arg(args, unsigned long);
             print_uint(u, 10, 0);
             break;
         }
         case 'x': {
-            unsigned long x = (unsigned long)va_arg(args, unsigned int);
+            unsigned long x = va_arg(args, unsigned long);
             print_uint(x, 16, 0);
             break;
         }
         case 'X': {
-            unsigned long x = (unsigned long)va_arg(args, unsigned int);
+            unsigned long x = va_arg(args, unsigned long);
             print_uint(x, 16, 1);
             break;
         }

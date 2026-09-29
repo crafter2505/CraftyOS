@@ -11,6 +11,6 @@ struct registers
     uint64_t rip, cs, rflags, rsp, ss;
 };
 
-void isr_halder(uint64_t int_no, uint64_t err_code,struct registers *regs);
+void isr_handler(uint64_t int_no, uint64_t err_code,struct registers *regs);
 
 #endif
