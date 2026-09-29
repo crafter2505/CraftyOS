@@ -1,6 +1,7 @@
 #include "pmm.h"
 #include "memory_map.h"
 #include "kprintf.h"
+#include "address_space.h"
 
 static uint8_t bitmap[PMM_BITMAP_SIZE];
 
@@ -116,7 +117,8 @@ void pmm_init(void) {
 
     pmm_mark_used(0, 0x100000);
 
-    pmm_mark_used(0x100000, (uint64_t)&kernel_end - 0x100000);
+    uint64_t kernel_end_phys = kvirt_to_phys(&kernel_end);
+    pmm_mark_used(0x100000, kernel_end_phys - 0x100000);
 
     kprintf("  PMM: %d pages free after reserving kernel\n",
             (long)free_pages);

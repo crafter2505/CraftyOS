@@ -3,7 +3,7 @@
 ASM      := nasm
 ASMFLAGS := -f bin
 CC       := gcc
-CFLAGS   := -m64 -ffreestanding -fno-pic -fno-stack-protector -nostdlib -Wall -Wextra -c
+CFLAGS   := -m64 -mcmodel=kernel -ffreestanding -fno-pic -fno-stack-protector -nostdlib -Wall -Wextra -c
 LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 

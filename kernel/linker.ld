@@ -1,25 +1,32 @@
 ENTRY(_start)
 
+KERNEL_VIRT_BASE = 0xFFFFFFFF80000000;
+KERNEL_PHYS_BASE = 0x0000000000100000;
+
 SECTIONS
 {
-    . = 0x100000;
+    . = KERNEL_VIRT_BASE;
 
-    .text : ALIGN(4k)
+    .text : AT(KERNEL_PHYS_BASE)
     {
         *(.text)
     }
-    .rodata : ALIGN(4k)
+
+    .rodata : AT(ADDR(.rodata) - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE)
     {
         *(.rodata)
     }
-    .data : ALIGN(4k)
+
+    .data : AT(ADDR(.data) - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE)
     {
         *(.data)
     }
-    .bss : ALIGN(4k)
+
+    .bss : AT(ADDR(.bss) - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE)
     {
         *(COMMON)
         *(.bss)
     }
+
     kernel_end = .;
 }
