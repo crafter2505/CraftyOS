@@ -30,7 +30,7 @@ build:
 $(STAGE1_BIN): $(STAGE1) | build
 	$(ASM) $(ASMFLAGS) $< -o $@
 
-$(STAGE2_BIN): $(STAGE2) bootloader/gdt.asm bootloader/paging.asm | build
+$(STAGE2_BIN): $(STAGE2) bootloader/gdt.asm | build
 	$(ASM) $(ASMFLAGS) $< -o $@
 
 build/kernel/%.o: kernel/%.c | build
