@@ -20,6 +20,8 @@ int vmm_map(uint64_t virt, uint64_t phys, uint64_t flags);
 
 void vmm_unmap(uint64_t virt);
 
+void vmm_invlpg(uint64_t virt);
+
 uint64_t vmm_translate(uint64_t virt);
 
 uint64_t vmm_alloc_page(uint64_t virt, uint64_t flags);

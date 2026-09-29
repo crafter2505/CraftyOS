@@ -14,7 +14,7 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.10.1\n");
+    kprintf("craftyOS v0.10.2\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -90,6 +90,37 @@ void _start(void) {
     kprintf("[OK] ");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     kprintf("Virtual memory manager ready\n");
+
+
+    kprintf("\nVMM test:\n");
+    uint64_t test_virt = 0xDEADB000ULL;
+    uint64_t phys = (uint64_t)pmm_alloc_page();
+    kprintf("  Allocated phys page: 0x%x\n", phys);
+
+    if (vmm_map(test_virt, phys, VMM_KERNEL_RW) == 0) {
+        kprintf("  Mapped 0x%x -> 0x%x\n", test_virt, phys);
+
+        volatile uint64_t *test = (volatile uint64_t *)test_virt;
+        *test = 0xCAFEBABE12345678ULL;
+        kprintf("  Wrote 0xCAFEBABE12345678\n");
+        kprintf("  Read back: 0x%x\n", *test);
+
+        uint64_t translated = vmm_translate(test_virt);
+        kprintf("  Translate(0x%x) = 0x%x\n", test_virt, translated);
+
+        if (translated == phys) {
+            kprintf("  PASS\n");
+        } else {
+            kprintf("  FAIL: expected 0x%x\n", phys);
+        }
+
+        vmm_unmap(test_virt);
+        kprintf("  Unmapped\n");
+    } else {
+        kprintf("  FAIL: vmm_map returned error\n");
+    }
+
+    pmm_free_page((void *)phys);
 
 
     kprintf("\nPMM test:\n");
