@@ -26,4 +26,6 @@ uint64_t vmm_translate(uint64_t virt);
 
 uint64_t vmm_alloc_page(uint64_t virt, uint64_t flags);
 
+void vmm_test(void);
+
 #endif

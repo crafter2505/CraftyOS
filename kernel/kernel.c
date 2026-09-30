@@ -14,7 +14,7 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.10.2\n");
+    kprintf("craftyOS v0.10.3\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -92,61 +92,14 @@ void _start(void) {
     kprintf("Virtual memory manager ready\n");
 
 
-    kprintf("\nVMM test:\n");
-    uint64_t test_virt = 0xDEADB000ULL;
-    uint64_t phys = (uint64_t)pmm_alloc_page();
-    kprintf("  Allocated phys page: 0x%x\n", phys);
+    vmm_init();
 
-    if (vmm_map(test_virt, phys, VMM_KERNEL_RW) == 0) {
-        kprintf("  Mapped 0x%x -> 0x%x\n", test_virt, phys);
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    kprintf("[OK] ");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+    kprintf("Virtual memory manager ready\n");
 
-        volatile uint64_t *test = (volatile uint64_t *)test_virt;
-        *test = 0xCAFEBABE12345678ULL;
-        kprintf("  Wrote 0xCAFEBABE12345678\n");
-        kprintf("  Read back: 0x%x\n", *test);
-
-        uint64_t translated = vmm_translate(test_virt);
-        kprintf("  Translate(0x%x) = 0x%x\n", test_virt, translated);
-
-        if (translated == phys) {
-            kprintf("  PASS\n");
-        } else {
-            kprintf("  FAIL: expected 0x%x\n", phys);
-        }
-
-        vmm_unmap(test_virt);
-        kprintf("  Unmapped\n");
-    } else {
-        kprintf("  FAIL: vmm_map returned error\n");
-    }
-
-    pmm_free_page((void *)phys);
-
-
-    kprintf("\nPMM test:\n");
-    kprintf("  Free pages before: %d\n", (long)pmm_get_free_pages());
-
-    void *p1 = pmm_alloc_page();
-    void *p2 = pmm_alloc_page();
-    void *p3 = pmm_alloc_page();
-
-    kprintf("  Allocated: 0x%x, 0x%x, 0x%x\n",
-            (uint64_t)p1, (uint64_t)p2, (uint64_t)p3);
-    kprintf("  Free pages after alloc: %d\n", (long)pmm_get_free_pages());
-
-    pmm_free_page(p2);
-    kprintf("  Freed middle page\n");
-    kprintf("  Free pages after free: %d\n", (long)pmm_get_free_pages());
-
-    void *p4 = pmm_alloc_page();
-    kprintf("  Allocated again: 0x%x (should match 0x%x)\n",
-            (uint64_t)p4, (uint64_t)p2);
-
-    if (p4 == p2) {
-        kprintf("  PASS: reused freed page\n");
-    } else {
-        kprintf("  FAIL: allocated a different page\n");
-    }
+    vmm_test();
 
     line_init();
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
