@@ -8,13 +8,14 @@
 #include "memory_map.h"
 #include "pmm.h"
 #include "vmm.h"
+#include "buddy.h"
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.10.3\n");
+    kprintf("craftyOS v0.11.1\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -76,7 +77,15 @@ void _start(void) {
 
     memory_map_dump();
 
-    pmm_init();
+        pmm_init();
+
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    kprintf("[OK] ");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+    kprintf("Physical memory manager ready\n");
+
+    buddy_init();
+    buddy_dump_stats();
 
     
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);

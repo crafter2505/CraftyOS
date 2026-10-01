@@ -163,17 +163,26 @@ build_page_tables:
     mov dword [edi + 510*8 + 4], 0
 
     mov edi, 0x14000
-    mov dword [edi + 0*8], 0x200000 | 0x83
-    mov dword [edi + 0*8 + 4], 0
-    mov ecx, 1
-.zero_ker_pd:
+    ; Map 4 entries x 2 MB = 8 MB at 0xFFFFFFFF80000000
+    ; Physical base is 0x200000 (KERNEL_PHYS_BASE)
+    mov ecx, 0
+    mov eax, 0x200000 | 0x83
+.kernel_pd_loop:
+    mov dword [edi + ecx*8], eax
+    mov dword [edi + ecx*8 + 4], 0
+    add eax, 0x200000
+    inc ecx
+    cmp ecx, 4
+    jne .kernel_pd_loop
+
+.zero_kernel_pd:
     cmp ecx, 512
-    je .ker_pd_done
+    je .kernel_pd_done
     mov dword [edi + ecx*8], 0
     mov dword [edi + ecx*8 + 4], 0
     inc ecx
-    jmp .zero_ker_pd
-.ker_pd_done:
+    jmp .zero_kernel_pd
+.kernel_pd_done:
 
     mov edi, 0x15000
     mov dword [edi + 0*8], 0x16000 | 0x03
