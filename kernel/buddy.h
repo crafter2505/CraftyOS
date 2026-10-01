@@ -27,5 +27,8 @@ void buddy_init(void);
 void *alloc_pages(int order);
 void  free_pages(void *addr, int order);
 void  buddy_dump_stats(void);
+void *alloc_pages(int order);
+void  free_pages(void *addr, int order);
+
 
 #endif

@@ -180,6 +180,69 @@ void buddy_init(void) {
     kprintf("  Buddy: init complete, highest phys = 0x%x\n", highest_phys_addr);
 }
 
+static struct page *find_buddy(struct page *p, int order) {
+    uint64_t page_idx = p - page_array;
+    uint64_t buddy_idx = page_idx ^ (1ULL << order);
+    if (buddy_idx >= BUDDY_MAX_PAGES) return 0;
+    return &page_array[buddy_idx];
+}
+
+void *alloc_pages(int order) {
+    if (order < 0 || order > BUDDY_MAX_ORDER) return 0;
+    int found = -1;
+    for (int o = order; o <= BUDDY_MAX_ORDER; o++) {
+        if (free_lists[o] != 0) {
+            found = o;
+            break;
+        }
+    }
+    if (found == -1) return 0;
+
+    struct page *block = free_lists[found];
+    free_list_remove(block);
+
+    while (found > order) {
+        found--;
+        uint64_t block_idx = block - page_array;
+        uint64_t upper_idx = block_idx + (1ULL << found);
+        struct page *upper = &page_array[upper_idx];
+        upper->order = (uint8_t)found;
+        free_list_push(upper);
+    }
+    block->flags = PAGE_ALLOCATED;
+    block->order = (uint8_t)order;
+    block->next = 0;
+    block->prev = 0;
+
+    return (void *)page_to_phys(block);
+}
+
+void free_pages(void *addr, int order) {
+    if (order < 0 || order > BUDDY_MAX_ORDER) return;
+    if (!addr) return;
+
+    struct page *p = phys_to_page((uint64_t)addr);
+    if (!p) return;
+    if (p->flags != PAGE_ALLOCATED) return;
+
+    while (order < BUDDY_MAX_ORDER) {
+        struct page *buddy = find_buddy(p, order);
+        if (!buddy) break;
+        if (buddy->flags != PAGE_FREE) break;
+        if (buddy->order != order) break;
+
+        free_list_remove(buddy);
+
+        if ((uint64_t)buddy < (uint64_t)p) {
+            p = buddy;
+        }
+        order++;
+    }
+
+    p->order = (uint8_t)order;
+    free_list_push(p);
+}
+
 void buddy_dump_stats(void) {
     kprintf("  Buddy: %d managed pages, %d free\n",
             (uint64_t)total_managed_pages, free_page_count);
