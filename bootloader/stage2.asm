@@ -269,7 +269,38 @@ long_mode_entry:
 .load_kernel:
     mov rdi, KERNEL_ELF_BUFFER
     mov esi, 40
-    mov edx, 58
+    mov edx, 1
+    call ata_read_sectors
+
+    mov rbx, [KERNEL_ELF_BUFFER + 32]
+    movzx r14, word [KERNEL_ELF_BUFFER + 54]
+    movzx r12, word [KERNEL_ELF_BUFFER + 56]
+    lea rbx, [KERNEL_ELF_BUFFER + rbx]
+    mov r13, 512
+
+.scan_load_segments:
+    test r12, r12
+    jz .load_segments_scanned
+
+    cmp dword [rbx], 1
+    jne .next_load_segment
+
+    mov rax, [rbx + 8]
+    add rax, [rbx + 32]
+    cmp rax, r13
+    cmova r13, rax
+
+.next_load_segment:
+    add rbx, r14
+    dec r12
+    jmp .scan_load_segments
+
+.load_segments_scanned:
+    add r13, 511
+    shr r13, 9
+    mov rdi, KERNEL_ELF_BUFFER
+    mov esi, 40
+    mov edx, r13d
     call ata_read_sectors
 
     mov rsi, msg_kernel

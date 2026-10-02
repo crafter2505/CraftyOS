@@ -1,7 +1,7 @@
 ASM      := nasm
 ASMFLAGS := -f bin
 CC       := gcc
-CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -fno-stack-protector -nostdlib -Wall -Wextra -c
+CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -c
 LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 
@@ -31,7 +31,7 @@ $(STAGE1_BIN): $(STAGE1) | build
 $(STAGE2_BIN): $(STAGE2) bootloader/gdt.asm | build
 	$(ASM) $(ASMFLAGS) $< -o $@
 
-build/kernel/%.o: kernel/%.c | build
+build/kernel/%.o: kernel/%.c Makefile | build
 	$(CC) $(CFLAGS) $< -o $@
 
 build/kernel/interrupts.o: kernel/interrupts.asm | build

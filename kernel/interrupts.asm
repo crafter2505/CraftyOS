@@ -78,7 +78,10 @@ isr_common:
     mov rsi, [rsp + 128]
     mov rdx, rsp
 
+    mov r12, rsp
+    and rsp, -16
     call isr_handler
+    mov rsp, r12
 
     pop r15
     pop r14

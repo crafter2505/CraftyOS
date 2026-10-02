@@ -10,13 +10,14 @@
 #include "vmm.h"
 #include "buddy.h"
 #include "slab.h"
+#include "address_space.h"
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.11.3\n");
+    kprintf("craftyOS v0.11.4\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -78,7 +79,7 @@ void _start(void) {
 
     memory_map_dump();
 
-        pmm_init();
+    pmm_init();
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
     kprintf("[OK] ");
@@ -119,24 +120,96 @@ void _start(void) {
 
     kprintf("Buddy test complete.\n");
 
-    
-    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("[OK] ");
-    terminal_set_color(VGA_WHITE, VGA_BLACK);
-    kprintf("Physical memory manager ready\n");
+        kprintf("\nBuddy alloc diagnostic:\n");
+    for (int i = 0; i < 10; i++) {
+        void *p = alloc_pages(0);
+        kprintf("  [%d] phys=0x%x virt=0x%x\n",
+                i, (uint64_t)p,
+                (uint64_t)p + DIRECT_MAP_BASE);
+        free_pages(p, 0);
+    }
+    kprintf("Stack region: 0x80000-0x90000 (RSP lives here)\n");
+    kprintf("Kernel: 0x200000-0x5AE000\n");
+    kprintf("Page tables: 0x10000-0x17000\n");
+    kprintf("Stage 1/2: 0x7C00-0x10000\n");
 
 
-    kprintf("\nSLAB test:\n");
+    kprintf("\nSLAB allocation test:\n");
 
     struct kmem_cache *task_cache = kmem_cache_create("task", 64);
-    struct kmem_cache *file_cache = kmem_cache_create("file", 128);
-    struct kmem_cache *inode_cache = kmem_cache_create("inode", 256);
-
-    if (task_cache && file_cache && inode_cache) {
-        kprintf("  [1] PASS: created 3 caches\n");
+    if (!task_cache) {
+        kprintf("  FAIL: could not create cache\n");
     } else {
-        kprintf("  [1] FAIL: cache creation\n");
+        void *a = kmem_cache_alloc(task_cache);
+        void *b = kmem_cache_alloc(task_cache);
+        void *c = kmem_cache_alloc(task_cache);
+
+        kprintf("  [1] allocated: 0x%x 0x%x 0x%x\n",
+                (uint64_t)a, (uint64_t)b, (uint64_t)c);
+
+        if (a && b && c && a != b && b != c && a != c) {
+            kprintf("  [1] PASS: three distinct objects\n");
+        } else {
+            kprintf("  [1] FAIL: distinctness\n");
+        }
+
+        *(uint64_t *)a = 0xAAAAAAAAAAAAAAAAULL;
+        *(uint64_t *)b = 0xBBBBBBBBBBBBBBBBULL;
+        *(uint64_t *)c = 0xCCCCCCCCCCCCCCCCULL;
+
+        if (*(uint64_t *)a == 0xAAAAAAAAAAAAAAAAULL &&
+            *(uint64_t *)b == 0xBBBBBBBBBBBBBBBBULL &&
+            *(uint64_t *)c == 0xCCCCCCCCCCCCCCCCULL) {
+            kprintf("  [2] PASS: read/write roundtrip\n");
+        } else {
+            kprintf("  [2] FAIL: read/write\n");
+        }
+
+        kmem_cache_free(task_cache, b);
+        kprintf("  [3] freed b\n");
+
+        void *d = kmem_cache_alloc(task_cache);
+        kprintf("  [3] reallocated: 0x%x\n", (uint64_t)d);
+
+        if (d == b) {
+            kprintf("  [3] PASS: got freed object back (LIFO)\n");
+        } else {
+            kprintf("  [3] FAIL: expected 0x%x, got 0x%x\n",
+                    (uint64_t)b, (uint64_t)d);
+        }
+
+        kmem_cache_free(task_cache, a);
+        kmem_cache_free(task_cache, c);
+        kmem_cache_free(task_cache, d);
+        kprintf("  [4] freed all objects\n");
+
+        void *objs[150];
+        for (int i = 0; i < 150; i++) {
+            objs[i] = kmem_cache_alloc(task_cache);
+        }
+        kprintf("  [5] allocated 150 objects (spans multiple slabs)\n");
+
+        int distinct = 1;
+        for (int i = 0; i < 150 && distinct; i++) {
+            if (!objs[i]) { distinct = 0; break; }
+            for (int j = i + 1; j < 150; j++) {
+                if (objs[i] == objs[j]) { distinct = 0; break; }
+            }
+        }
+        if (distinct) {
+            kprintf("  [5] PASS: 150 distinct objects\n");
+        } else {
+            kprintf("  [5] FAIL: duplicate or null\n");
+        }
+
+        for (int i = 0; i < 150; i++) {
+            kmem_cache_free(task_cache, objs[i]);
+        }
+        kprintf("  [6] freed 150 objects\n");
+
+        slab_dump_stats();
     }
+    
 
     slab_dump_stats();
 
