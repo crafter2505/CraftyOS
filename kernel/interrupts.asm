@@ -5,8 +5,8 @@ extern isr_handler
 %macro ISR_NOERR 1
 global isr%1
 isr%1:
-    push qword 0            ; dummy error code
-    push qword %1           ; interrupt number
+    push qword 0
+    push qword %1
     jmp isr_common
 %endmacro
 
@@ -17,38 +17,38 @@ isr%1:
     jmp isr_common
 %endmacro
 
-ISR_NOERR 0     ; Divide Error
-ISR_NOERR 1     ; Debug
-ISR_NOERR 2     ; NMI
-ISR_NOERR 3     ; Breakpoint
-ISR_NOERR 4     ; Overflow
-ISR_NOERR 5     ; Bound Range
-ISR_NOERR 6     ; Invalid Opcode
-ISR_NOERR 7     ; Device Not Available
-ISR_ERR   8     ; Double Fault
-ISR_NOERR 9     ; Coprocessor Segment Overrun
-ISR_ERR   10    ; Invalid TSS
-ISR_ERR   11    ; Segment Not Present
-ISR_ERR   12    ; Stack Fault
-ISR_ERR   13    ; General Protection Fault
-ISR_ERR   14    ; Page Fault
-ISR_NOERR 15    ; Reserved
-ISR_NOERR 16    ; x87 FPU Error
-ISR_ERR   17    ; Alignment Check
-ISR_NOERR 18    ; Machine Check
-ISR_NOERR 19    ; SIMD FPU Error
-ISR_NOERR 20    ; Virtualization
-ISR_ERR   21    ; Control Protection
-ISR_NOERR 22    ; Reserved
-ISR_NOERR 23    ; Reserved
-ISR_NOERR 24    ; Reserved
-ISR_NOERR 25    ; Reserved
-ISR_NOERR 26    ; Reserved
-ISR_NOERR 27    ; Reserved
-ISR_NOERR 28    ; Hypervisor Injection
-ISR_ERR   29    ; VMM Communication
-ISR_ERR   30    ; Security Exception
-ISR_NOERR 31    ; Reserved
+ISR_NOERR 0
+ISR_NOERR 1
+ISR_NOERR 2
+ISR_NOERR 3
+ISR_NOERR 4
+ISR_NOERR 5
+ISR_NOERR 6
+ISR_NOERR 7
+ISR_ERR   8
+ISR_NOERR 9
+ISR_ERR   10
+ISR_ERR   11
+ISR_ERR   12
+ISR_ERR   13
+ISR_ERR   14
+ISR_NOERR 15
+ISR_NOERR 16
+ISR_ERR   17
+ISR_NOERR 18
+ISR_NOERR 19
+ISR_NOERR 20
+ISR_ERR   21
+ISR_NOERR 22
+ISR_NOERR 23
+ISR_NOERR 24
+ISR_NOERR 25
+ISR_NOERR 26
+ISR_NOERR 27
+ISR_NOERR 28
+ISR_ERR   29
+ISR_ERR   30
+ISR_NOERR 31
 
 
 %assign i 32
@@ -58,7 +58,6 @@ ISR_NOERR 31    ; Reserved
 %endrep
 
 isr_common:
-    ; Push all general-purpose registers
     push rax
     push rbx
     push rcx
@@ -75,9 +74,9 @@ isr_common:
     push r14
     push r15
 
-    mov rdi, [rsp + 120]    ; interrupt number (at the end of the pushes)
-    mov rsi, [rsp + 128]    ; error code
-    mov rdx, rsp            ; pointer to register block
+    mov rdi, [rsp + 120]
+    mov rsi, [rsp + 128]
+    mov rdx, rsp
 
     call isr_handler
 

@@ -9,13 +9,14 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "buddy.h"
+#include "slab.h"
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.11.1\n");
+    kprintf("craftyOS v0.11.3\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -105,7 +106,7 @@ void _start(void) {
     free_pages(p1, 0);
     kprintf("  Freed both pages\n");
 
-    void *p3 = alloc_pages(3);   /* 8 pages */
+    void *p3 = alloc_pages(3);
     kprintf("  [3] alloc_pages(3) = 0x%x\n", (uint64_t)p3);
 
     if (p3) {
@@ -123,6 +124,21 @@ void _start(void) {
     kprintf("[OK] ");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     kprintf("Physical memory manager ready\n");
+
+
+    kprintf("\nSLAB test:\n");
+
+    struct kmem_cache *task_cache = kmem_cache_create("task", 64);
+    struct kmem_cache *file_cache = kmem_cache_create("file", 128);
+    struct kmem_cache *inode_cache = kmem_cache_create("inode", 256);
+
+    if (task_cache && file_cache && inode_cache) {
+        kprintf("  [1] PASS: created 3 caches\n");
+    } else {
+        kprintf("  [1] FAIL: cache creation\n");
+    }
+
+    slab_dump_stats();
 
     vmm_init();
 
