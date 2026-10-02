@@ -9,15 +9,15 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "buddy.h"
-#include "slab.h"
 #include "address_space.h"
+#include "kmalloc.h"
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.11.4\n");
+    kprintf("craftyOS v0.11.5\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -88,6 +88,7 @@ void _start(void) {
 
     buddy_init();
     buddy_dump_stats();
+    kmalloc_init();
 
      kprintf("\nBuddy test:\n");
 
@@ -134,84 +135,81 @@ void _start(void) {
     kprintf("Stage 1/2: 0x7C00-0x10000\n");
 
 
-    kprintf("\nSLAB allocation test:\n");
+    /* ----- kmalloc test ----- */
+    kprintf("\nkmalloc test:\n");
 
-    struct kmem_cache *task_cache = kmem_cache_create("task", 64);
-    if (!task_cache) {
-        kprintf("  FAIL: could not create cache\n");
-    } else {
-        void *a = kmem_cache_alloc(task_cache);
-        void *b = kmem_cache_alloc(task_cache);
-        void *c = kmem_cache_alloc(task_cache);
-
-        kprintf("  [1] allocated: 0x%x 0x%x 0x%x\n",
-                (uint64_t)a, (uint64_t)b, (uint64_t)c);
-
-        if (a && b && c && a != b && b != c && a != c) {
-            kprintf("  [1] PASS: three distinct objects\n");
-        } else {
-            kprintf("  [1] FAIL: distinctness\n");
-        }
-
+    /* [1] Small allocation */
+    void *a = kmalloc(100);
+    kprintf("  [1] kmalloc(100) = 0x%x\n", (uint64_t)a);
+    if (a) {
         *(uint64_t *)a = 0xAAAAAAAAAAAAAAAAULL;
-        *(uint64_t *)b = 0xBBBBBBBBBBBBBBBBULL;
-        *(uint64_t *)c = 0xCCCCCCCCCCCCCCCCULL;
-
-        if (*(uint64_t *)a == 0xAAAAAAAAAAAAAAAAULL &&
-            *(uint64_t *)b == 0xBBBBBBBBBBBBBBBBULL &&
-            *(uint64_t *)c == 0xCCCCCCCCCCCCCCCCULL) {
-            kprintf("  [2] PASS: read/write roundtrip\n");
+        if (*(uint64_t *)a == 0xAAAAAAAAAAAAAAAAULL) {
+            kprintf("  [1] PASS: write/read 8 bytes\n");
         } else {
-            kprintf("  [2] FAIL: read/write\n");
+            kprintf("  [1] FAIL: read/write\n");
         }
-
-        kmem_cache_free(task_cache, b);
-        kprintf("  [3] freed b\n");
-
-        void *d = kmem_cache_alloc(task_cache);
-        kprintf("  [3] reallocated: 0x%x\n", (uint64_t)d);
-
-        if (d == b) {
-            kprintf("  [3] PASS: got freed object back (LIFO)\n");
-        } else {
-            kprintf("  [3] FAIL: expected 0x%x, got 0x%x\n",
-                    (uint64_t)b, (uint64_t)d);
-        }
-
-        kmem_cache_free(task_cache, a);
-        kmem_cache_free(task_cache, c);
-        kmem_cache_free(task_cache, d);
-        kprintf("  [4] freed all objects\n");
-
-        void *objs[150];
-        for (int i = 0; i < 150; i++) {
-            objs[i] = kmem_cache_alloc(task_cache);
-        }
-        kprintf("  [5] allocated 150 objects (spans multiple slabs)\n");
-
-        int distinct = 1;
-        for (int i = 0; i < 150 && distinct; i++) {
-            if (!objs[i]) { distinct = 0; break; }
-            for (int j = i + 1; j < 150; j++) {
-                if (objs[i] == objs[j]) { distinct = 0; break; }
-            }
-        }
-        if (distinct) {
-            kprintf("  [5] PASS: 150 distinct objects\n");
-        } else {
-            kprintf("  [5] FAIL: duplicate or null\n");
-        }
-
-        for (int i = 0; i < 150; i++) {
-            kmem_cache_free(task_cache, objs[i]);
-        }
-        kprintf("  [6] freed 150 objects\n");
-
-        slab_dump_stats();
+    } else {
+        kprintf("  [1] FAIL: allocation failed\n");
     }
-    
 
-    slab_dump_stats();
+    /* [2] Zero-init */
+    void *b = kzalloc(256);
+    kprintf("  [2] kzalloc(256) = 0x%x\n", (uint64_t)b);
+    if (b) {
+        int all_zero = 1;
+        for (int i = 0; i < 256; i++) {
+            if (((uint8_t *)b)[i] != 0) { all_zero = 0; break; }
+        }
+        if (all_zero) {
+            kprintf("  [2] PASS: all 256 bytes zero\n");
+        } else {
+            kprintf("  [2] FAIL: not zeroed\n");
+        }
+    } else {
+        kprintf("  [2] FAIL: allocation failed\n");
+    }
+
+    /* [3] Large allocation (buddy path) */
+    void *c = kmalloc(5000);
+    kprintf("  [3] kmalloc(5000) = 0x%x\n", (uint64_t)c);
+    if (c) {
+        *(uint64_t *)c = 0xCCCCCCCCCCCCCCCCULL;
+        if (*(uint64_t *)c == 0xCCCCCCCCCCCCCCCCULL) {
+            kprintf("  [3] PASS: large alloc write/read\n");
+        } else {
+            kprintf("  [3] FAIL\n");
+        }
+    } else {
+        kprintf("  [3] FAIL: allocation failed\n");
+    }
+
+    /* [4] Many small allocations to force multiple buckets */
+    void *ptrs[200];
+    int ok = 1;
+    for (int i = 0; i < 200; i++) {
+        ptrs[i] = 0;
+    }
+    for (int i = 0; i < 200; i++) {
+        ptrs[i] = kmalloc(32 + (i % 4) * 16);   /* 32, 48, 64, 80 */
+        if (!ptrs[i]) { ok = 0; break; }
+    }
+    if (ok) {
+        kprintf("  [4] PASS: 200 varied allocations\n");
+    } else {
+        kprintf("  [4] FAIL\n");
+    }
+    for (int i = 0; i < 200; i++) {
+        if (ptrs[i]) kfree(ptrs[i]);
+    }
+    kprintf("  [5] Freed all\n");
+
+    /* Clean up */
+    kfree(a);
+    kfree(b);
+    kfree(c);
+
+    kmalloc_dump_stats();
+
 
     vmm_init();
 

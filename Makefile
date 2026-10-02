@@ -10,8 +10,11 @@ LOG 	   := qemu.log
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
 
-KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c kernel/line.c kernel/memory_map.c kernel/pmm.c kernel/fault.c kernel/vmm.c kernel/buddy.c kernel/slab.c
-KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_SRCS)) build/kernel/interrupts.o
+KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c kernel/line.c kernel/memory_map.c kernel/pmm.c kernel/fault.c kernel/vmm.c kernel/buddy.c kernel/slab.c kernel/kmalloc.c kernel/interrupts.asm
+KERNEL_C_SRCS := $(filter %.c,$(KERNEL_SRCS))
+KERNEL_ASM_SRCS := $(filter %.asm,$(KERNEL_SRCS))
+KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_C_SRCS)) \
+               $(patsubst kernel/%.asm,build/kernel/%.o,$(KERNEL_ASM_SRCS))
 KERNEL_LD   := kernel/linker.ld
 
 STAGE1_BIN := build/stage1.bin
@@ -34,7 +37,7 @@ $(STAGE2_BIN): $(STAGE2) bootloader/gdt.asm | build
 build/kernel/%.o: kernel/%.c Makefile | build
 	$(CC) $(CFLAGS) $< -o $@
 
-build/kernel/interrupts.o: kernel/interrupts.asm | build
+build/kernel/%.o: kernel/%.asm | build
 	$(ASM) -f elf64 $< -o $@
 
 $(KERNEL_ELF): $(KERNEL_OBJS) $(KERNEL_LD)
