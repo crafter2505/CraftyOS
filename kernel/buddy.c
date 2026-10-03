@@ -3,7 +3,9 @@
 #include "memory_map.h"
 #include "address_space.h"
 
-static struct page page_array[BUDDY_MAX_PAGES];
+struct page page_array[BUDDY_MAX_PAGES];
+uint64_t page_array_size = BUDDY_MAX_PAGES;
+
 static struct page *free_lists[BUDDY_MAX_ORDER + 1];
 
 static uint64_t total_managed_pages = 0;
@@ -18,12 +20,9 @@ static struct page *phys_to_page(uint64_t phys) {
     return &page_array[page_idx];
 }
 
-static uint64_t page_to_phys(struct page *p) {
-    return (uint64_t)(p - page_array) * BUDDY_PAGE_SIZE;
-}
 static void free_list_push(struct page *p) {
     uint8_t order = p->order;
-    p->flags = PAGE_FREE;
+    p->flags = PAGE_FLAG_BUDDY_FREE;
     p->next = free_lists[order];
     p->prev = 0;
     if (free_lists[order]) {
@@ -57,7 +56,7 @@ static void mark_reserved(uint64_t base, uint64_t size) {
     if (end_page > BUDDY_MAX_PAGES) end_page = BUDDY_MAX_PAGES;
 
     for (uint64_t i = start_page; i < end_page; i++) {
-        page_array[i].flags = PAGE_UNAVAILABLE;
+        page_array[i].flags = PAGE_FLAG_UNAVAILABLE;
         page_array[i].order = 0;
         page_array[i].next = 0;
         page_array[i].prev = 0;
@@ -72,7 +71,7 @@ static void mark_free_range(uint64_t base, uint64_t size) {
     if (start_page >= end_page) return;
 
     for (uint64_t i = start_page; i < end_page; i++) {
-        page_array[i].flags = PAGE_ALLOCATED;
+        page_array[i].flags = PAGE_FLAG_BUDDY_ALLOC;
         page_array[i].order = 0;
         page_array[i].next = 0;
         page_array[i].prev = 0;
@@ -106,7 +105,7 @@ static void build_buddy_from_range(uint64_t start_page, uint64_t end_page) {
 
 void buddy_init(void) {
     for (uint64_t i = 0; i < BUDDY_MAX_PAGES; i++) {
-        page_array[i].flags = PAGE_UNAVAILABLE;
+        page_array[i].flags = PAGE_FLAG_UNAVAILABLE;
         page_array[i].order = 0;
         page_array[i].next = 0;
         page_array[i].prev = 0;
@@ -157,7 +156,7 @@ void buddy_init(void) {
         uint64_t run_start = 0;
         uint64_t run_end = 0;
         for (uint64_t pg = start_page; pg < end_page; pg++) {
-            if (page_array[pg].flags == PAGE_ALLOCATED) {
+            if (page_array[pg].flags == PAGE_FLAG_BUDDY_ALLOC) {
                 if (run_start == 0) {
                     run_start = pg;
                     run_end = pg + 1;
@@ -209,7 +208,7 @@ void *alloc_pages(int order) {
         upper->order = (uint8_t)found;
         free_list_push(upper);
     }
-    block->flags = PAGE_ALLOCATED;
+    block->flags = PAGE_FLAG_BUDDY_ALLOC;
     block->order = (uint8_t)order;
     block->next = 0;
     block->prev = 0;
@@ -223,12 +222,12 @@ void free_pages(void *addr, int order) {
 
     struct page *p = phys_to_page((uint64_t)addr);
     if (!p) return;
-    if (p->flags != PAGE_ALLOCATED) return;
+    if (p->flags != PAGE_FLAG_BUDDY_ALLOC) return;
 
     while (order < BUDDY_MAX_ORDER) {
         struct page *buddy = find_buddy(p, order);
         if (!buddy) break;
-        if (buddy->flags != PAGE_FREE) break;
+        if (buddy->flags != PAGE_FLAG_BUDDY_FREE) break;
         if (buddy->order != order) break;
 
         free_list_remove(buddy);

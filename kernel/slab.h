@@ -14,6 +14,8 @@ struct kmem_cache {
     uint64_t used_objects;
     void    *free_list;
     void    *slab_list;
+    /* Index into buckets[], or -1 for user-created caches. */
+    int      bucket_index;
 };
 
 struct kmem_cache *kmem_cache_create(const char *name, uint64_t object_size);
