@@ -13,13 +13,15 @@
 #include "kmalloc.h"
 #include "page.h"
 #include "slab.h"
+#include "thread.h"
+#include "process.h"
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.11.5\n");
+    kprintf("craftyOS v0.12.1\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -92,7 +94,7 @@ void _start(void) {
     buddy_dump_stats();
     kmalloc_init();
 
-     kprintf("\nBuddy test:\n");
+    kprintf("\nBuddy test:\n");
 
     void *p1 = alloc_pages(0);
     kprintf("  [1] alloc_pages(0) = 0x%x\n", (uint64_t)p1);
@@ -123,7 +125,7 @@ void _start(void) {
 
     kprintf("Buddy test complete.\n");
 
-        kprintf("\nBuddy alloc diagnostic:\n");
+    kprintf("\nBuddy alloc diagnostic:\n");
     for (int i = 0; i < 10; i++) {
         void *p = alloc_pages(0);
         kprintf("  [%d] phys=0x%x virt=0x%x\n",
@@ -240,6 +242,49 @@ void _start(void) {
     kfree(c);
 
     kmalloc_dump_stats();
+
+    kprintf("\n=== Thread/process subsystem ===\n");
+
+    thread_init_subsystem();
+    process_init_subsystem();
+
+    thread_dump_all();
+    process_dump_all();
+
+    /* Create a thread to verify allocation works (don't run it yet) */
+    struct thread *test_thread = thread_create("test", 0);
+    if (test_thread) {
+        kprintf("  TEST: created thread id=%d state=%d\n",
+                (uint64_t)test_thread->id,
+                (uint64_t)test_thread->state);
+        kprintf("  TEST: ctx.rip=0x%x ctx.rsp=0x%x ctx.rflags=0x%x\n",
+                test_thread->ctx.rip,
+                test_thread->ctx.rsp,
+                test_thread->ctx.rflags);
+
+        if (test_thread->ctx.rip != 0 &&
+            test_thread->ctx.rsp != 0 &&
+            test_thread->state == THREAD_READY) {
+            kprintf("  [1] PASS: thread created with valid context\n");
+        } else {
+            kprintf("  [1] FAIL: thread context invalid\n");
+        }
+    } else {
+        kprintf("  [1] FAIL: thread_create returned NULL\n");
+    }
+
+    /* Verify stack is in the direct-map region (kmalloc path) */
+    if (test_thread) {
+        uint64_t stack_addr = (uint64_t)test_thread->stack_base;
+        if (stack_addr >= DIRECT_MAP_BASE &&
+            stack_addr <  DIRECT_MAP_BASE + 0x8000000ULL) {
+            kprintf("  [2] PASS: stack in direct-map region\n");
+        } else {
+            kprintf("  [2] FAIL: stack at 0x%x (unexpected)\n", stack_addr);
+        }
+    }
+
+    thread_dump_all();
 
 
     vmm_init();
