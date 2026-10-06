@@ -10,7 +10,7 @@ LOG 	   := qemu.log
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
 
-KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c kernel/line.c kernel/memory_map.c kernel/pmm.c kernel/fault.c kernel/vmm.c kernel/buddy.c kernel/slab.c kernel/kmalloc.c kernel/page.c kernel/interrupts.asm kernel/thread.c kernel/process.c
+KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c kernel/line.c kernel/memory_map.c kernel/pmm.c kernel/fault.c kernel/vmm.c kernel/buddy.c kernel/slab.c kernel/kmalloc.c kernel/page.c kernel/interrupts.asm kernel/thread.c kernel/process.c kernel/switch_test.c kernel/switch.asm
 KERNEL_C_SRCS := $(filter %.c,$(KERNEL_SRCS))
 KERNEL_ASM_SRCS := $(filter %.asm,$(KERNEL_SRCS))
 KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_C_SRCS)) \

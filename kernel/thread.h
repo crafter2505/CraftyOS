@@ -53,5 +53,9 @@ struct thread *thread_current(void);
 uint64_t thread_count_total(void);
 void thread_dump_all(void);
 
+/* From kernel/switch.asm */
+extern void switch_to(struct thread_context *old_ctx, struct thread_context *new_ctx);
+
+
 
 #endif

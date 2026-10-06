@@ -48,22 +48,18 @@ void thread_trampoline(void) {
 }
 
 struct thread *thread_create(const char *name, void (*entry)(void)) {
-    /* Allocate the thread struct */
     struct thread *t = (struct thread *)kmalloc(sizeof(struct thread));
     if (!t) return 0;
 
-    /* Zero it */
     uint8_t *p = (uint8_t *)t;
     for (unsigned long i = 0; i < sizeof(struct thread); i++) p[i] = 0;
 
-    /* Allocate the kernel stack */
     void *stack = kmalloc(THREAD_STACK_SIZE);
     if (!stack) {
         kfree(t);
         return 0;
     }
 
-    /* Initialize fields */
     t->id = next_thread_id++;
     int i = 0;
     while (name[i] && i < THREAD_NAME_LEN - 1) { t->name[i] = name[i]; i++; }
@@ -76,29 +72,14 @@ struct thread *thread_create(const char *name, void (*entry)(void)) {
     t->next = 0;
     t->total_ticks = 0;
 
-    /* Set up the thread's stack for the first context switch.
-     *
-     * The stack grows down. The top of the allocated region is
-     * stack + THREAD_STACK_SIZE. We leave a small gap so the first
-     * push doesn't overflow into unmapped territory.
-     *
-     * ctx.rsp points at the top (highest valid address).
-     * ctx.rip points at thread_trampoline.
-     * ctx.rflags has IF set (interrupts enabled when the thread runs).
-     */
     uint64_t stack_top = (uint64_t)stack + THREAD_STACK_SIZE;
 
-    /* x86-64 SysV ABI requires 16-byte alignment at function entry.
-     * A call pushes 8 bytes, so at the moment of the call, RSP % 16 == 8.
-     * The trampoline will be entered via `ret` in switch_to, which pops
-     * 8 bytes, so RSP should be 16-byte aligned when the ret executes. */
     stack_top &= ~0xFULL;
 
     t->ctx.rsp    = stack_top;
     t->ctx.rip    = (uint64_t)thread_trampoline;
-    t->ctx.rflags = 0x202;      /* IF set, bit 1 always 1 */
+    t->ctx.rflags = 0x202;
 
-    /* All other registers zeroed by the memset above */
 
     total_threads_created++;
 
@@ -108,15 +89,6 @@ struct thread *thread_create(const char *name, void (*entry)(void)) {
     return t;
 }
 
-/* -----------------------------------------------------------------
- * Terminate the current thread.
- *
- * Marks the thread TERMINATED and calls the scheduler to switch away.
- * The scheduler will reap terminated threads later.
- *
- * For Session 12.1, this is a stub — it prints and halts.
- * Session 12.4 replaces the halt with a call to schedule().
- * ----------------------------------------------------------------- */
 void thread_exit(void) {
     struct thread *t = current_thread;
     if (t) {

@@ -15,13 +15,14 @@
 #include "slab.h"
 #include "thread.h"
 #include "process.h"
+#include "switch_test.h"
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.12.1\n");
+    kprintf("craftyOS v0.12.2\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -285,6 +286,8 @@ void _start(void) {
     }
 
     thread_dump_all();
+
+    switch_test();
 
 
     vmm_init();
