@@ -18,8 +18,57 @@
 #include "switch_test.h"
 #include "sched.h"
 
+static volatile int reap_test_counter = 0;
+
 static int test_counter = 0;
 static volatile int test_finished = 0;
+
+void reap_test_thread(void) {
+    __asm__ volatile ("sti");
+    reap_test_counter++;
+    thread_exit();
+}
+
+void run_reap_test(void) {
+    kprintf("\n=== reap test ===\n");
+
+    uint64_t free_before = pmm_get_free_pages();
+    kprintf("  free pages before: %d\n", (long)free_before);
+
+    int failed = 0;
+    for (int i = 0; i < 10; i++) {
+        struct thread *t = thread_create("worker", reap_test_thread);
+        if (!t) {
+            kprintf("  FAIL: unable to create worker thread\n");
+            failed = 1;
+            break;
+        }
+        sched_add(t);
+
+        int expected = i + 1;
+        while (reap_test_counter < expected) {
+            yield();
+        }
+    }
+
+    kprintf("  created and completed %d threads\n",
+            (uint64_t)reap_test_counter);
+
+    for (int i = 0; i < 5; i++) {
+        yield();
+    }
+
+    uint64_t free_after = pmm_get_free_pages();
+    kprintf("  free pages after:  %d\n", (long)free_after);
+
+    if (!failed && free_after >= free_before - 2) {
+        kprintf("  PASS: memory returned to baseline\n");
+    } else {
+        kprintf("  FAIL: leaked %d pages\n",
+                (long)(free_before - free_after));
+    }
+    kprintf("=== reap test done ===\n\n");
+}
 
 void test_thread_entry(void) {
     for (int i = 0; i < 5; i++) {
@@ -37,7 +86,7 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.12.3\n");
+    kprintf("craftyOS v0.12.4\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -344,6 +393,9 @@ void _start(void) {
         }
     }
 
+    run_reap_test();
+
+    terminal_set_color(VGA_GREEN, VGA_BLACK);
     kprintf("\ncraftyOS> ");
 
     for (;;) {

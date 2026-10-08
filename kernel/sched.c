@@ -54,13 +54,15 @@ void sched_remove(struct thread *t) {
 }
 
 static struct thread *find_next_runnable(struct thread *start) {
-    struct thread *t = start->next ? start->next : start;
+    struct thread *first = start->next ? start->next : start;
+    struct thread *t = first;
 
     while (t != start) {
         if (t->state == THREAD_READY || t->state == THREAD_RUNNING) {
             return t;
         }
         t = t->next ? t->next : start;
+        if (t == first) break;
     }
 
     if (idle_thread && idle_thread != start &&
@@ -70,6 +72,19 @@ static struct thread *find_next_runnable(struct thread *start) {
     }
 
     return start;
+}
+
+void sched_unlink_current(void) {
+    struct thread *self = thread_current();
+    if (!self || !self->next || self->next == self) return;
+
+    struct thread *prev = self;
+    while (prev->next != self) {
+        prev = prev->next;
+        if (!prev || prev == self) return;
+    }
+
+    prev->next = self->next;
 }
 
 void schedule(void) {
@@ -100,6 +115,13 @@ void sched_tick(void) {
         if (flags & (1ULL << 9)) {
             __asm__ volatile ("sti" : : : "memory");
         }
+    }
+}
+
+void sched_idle_loop(void) {
+    for (;;) {
+        thread_reap_pending();
+        __asm__ volatile ("sti; hlt");
     }
 }
 

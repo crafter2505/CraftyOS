@@ -12,5 +12,7 @@ void schedule(void);
 void sched_tick(void);
 void sched_dump(void);
 void yield(void);
+void sched_idle_loop(void) __attribute__((noreturn));
+void sched_unlink_current(void);
 
 #endif

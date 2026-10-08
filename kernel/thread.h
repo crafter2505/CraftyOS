@@ -46,6 +46,7 @@ struct thread {
     void (*entry)(void);
     struct process *process;
     struct thread *next;
+    struct thread *next_dead;
     uint64_t total_ticks;
 };
 
@@ -56,6 +57,7 @@ struct thread *thread_current(void);
 uint64_t thread_count_total(void);
 void thread_dump_all(void);
 void set_current_thread(struct thread *t);
+void thread_reap_pending(void);
 
 /* From kernel/switch.asm */
 extern void switch_to(struct thread_context *old_ctx, struct thread_context *new_ctx);

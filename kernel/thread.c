@@ -6,6 +6,7 @@
 
 static uint64_t next_thread_id = 1;
 static uint64_t total_threads_created = 0;
+static struct thread *dead_list = 0;
 
 static struct thread * current_thread = 0;
 
@@ -44,9 +45,9 @@ void thread_trampoline(void) {
         t->entry();
         thread_exit();
     }
-    for (;;) {
-        __asm__ volatile ("sti; hlt");
-    }
+    /* No entry = idle thread. */
+    sched_idle_loop();
+    for (;;) __asm__ volatile ("cli; hlt");
 }
 void set_current_thread(struct thread *t) {
     current_thread = t;
@@ -98,12 +99,16 @@ struct thread *thread_create(const char *name, void (*entry)(void)) {
 
 void thread_exit(void) {
     struct thread *t = thread_current();
+    __asm__ volatile ("cli");
+
     if (t) {
         t->state = THREAD_TERMINATED;
         kprintf("  THREAD: '%s' (id=%d) exiting\n", t->name, (uint64_t)t->id);
+        sched_unlink_current();
+        t->next_dead = dead_list;
+        dead_list = t;
     }
 
-    __asm__ volatile ("cli");
     schedule();
 
     for (;;) {
@@ -117,6 +122,28 @@ struct thread *thread_current(void) {
 
 uint64_t thread_count_total(void) {
     return total_threads_created;
+}
+
+void thread_reap_pending(void) {
+    uint64_t flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
+
+    struct thread *list = dead_list;
+    dead_list = 0;
+
+    if (flags & (1ULL << 9)) {
+        __asm__ volatile ("sti" : : : "memory");
+    }
+
+    while (list) {
+        struct thread *next = list->next_dead;
+        if (list->stack_base) {
+            kfree(list->stack_base);
+        }
+        kfree(list);
+
+        list = next;
+    }
 }
 
 void thread_dump_all(void) {
