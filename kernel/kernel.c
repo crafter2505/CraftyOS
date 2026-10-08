@@ -16,13 +16,28 @@
 #include "thread.h"
 #include "process.h"
 #include "switch_test.h"
+#include "sched.h"
+
+static int test_counter = 0;
+static volatile int test_finished = 0;
+
+void test_thread_entry(void) {
+    for (int i = 0; i < 5; i++) {
+        test_counter++;
+        kprintf("  [test] counter=%d\n", (uint64_t)test_counter);
+        for (volatile int j = 0; j < 5000000; j++);
+        yield();
+    }
+    kprintf("  [test] done\n");
+    test_finished = 1;
+}
 
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.12.2\n");
+    kprintf("craftyOS v0.12.3\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -248,12 +263,13 @@ void _start(void) {
 
     thread_init_subsystem();
     process_init_subsystem();
+    sched_init();
 
     thread_dump_all();
     process_dump_all();
 
-    /* Create a thread to verify allocation works (don't run it yet) */
-    struct thread *test_thread = thread_create("test", 0);
+    /* Create a thread to verify allocation and context before scheduling it. */
+    struct thread *test_thread = thread_create("test", test_thread_entry);
     if (test_thread) {
         kprintf("  TEST: created thread id=%d state=%d\n",
                 (uint64_t)test_thread->id,
@@ -288,6 +304,7 @@ void _start(void) {
     thread_dump_all();
 
     switch_test();
+    
 
 
     vmm_init();
@@ -316,12 +333,21 @@ void _start(void) {
     pic_clear_mask(0);
     pic_clear_mask(1);
 
-    kprintf("\n");
-    kprintf("craftyOS> ");
+    /* Test thread */
+    if (test_thread) sched_add(test_thread);
 
     __asm__ volatile ("sti");
 
+    if (test_thread) {
+        while (!test_finished) {
+            __asm__ volatile ("hlt");
+        }
+    }
+
+    kprintf("\ncraftyOS> ");
+
     for (;;) {
+        (void)line_get();
         __asm__ volatile ("hlt");
     }
 }

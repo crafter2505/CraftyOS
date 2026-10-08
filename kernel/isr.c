@@ -4,6 +4,7 @@
 #include "timer.h"
 #include "keyboard.h"
 #include "fault.h"
+#include "sched.h"
 
 void isr_handler(uint64_t int_no, uint64_t err_code, struct registers *regs)
 {
@@ -17,6 +18,7 @@ void isr_handler(uint64_t int_no, uint64_t err_code, struct registers *regs)
         default: break;
         }
         pic_send_eoi((unsigned char)irq);
+        if (irq == 0) sched_tick();
     } else {
         kprintf("[INT %d]\n", (long)int_no);
     }

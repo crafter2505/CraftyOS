@@ -41,6 +41,9 @@ struct thread {
     void *stack_base;
     uint64_t stack_size;
     struct thread_context ctx;
+    uint32_t budget;
+    uint32_t _pad2;
+    void (*entry)(void);
     struct process *process;
     struct thread *next;
     uint64_t total_ticks;
@@ -52,6 +55,7 @@ void thread_exit(void) __attribute__((noreturn));
 struct thread *thread_current(void);
 uint64_t thread_count_total(void);
 void thread_dump_all(void);
+void set_current_thread(struct thread *t);
 
 /* From kernel/switch.asm */
 extern void switch_to(struct thread_context *old_ctx, struct thread_context *new_ctx);

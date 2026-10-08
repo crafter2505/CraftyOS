@@ -1,5 +1,6 @@
 #include "thread.h"
 #include "process.h"
+#include "sched.h"
 #include "kprintf.h"
 #include "kmalloc.h"
 
@@ -18,6 +19,8 @@ void thread_init_subsystem(void) {
     for (unsigned long i = 0; i < sizeof(struct thread); i++) p[i] = 0;
 
     boot->id = next_thread_id++;
+    boot->budget = 10;
+    boot->entry = 0;
     const char *bn = "boot";
     int i = 0;
     while (bn[i] && i < THREAD_NAME_LEN -1) {boot->name[i] = bn[i]; i++;}
@@ -34,17 +37,19 @@ void thread_init_subsystem(void) {
     kprintf(" THREAD: boot thread id=%d created\n", (uint64_t)boot->id);
 }
 
-static void (*pending_entry)(void) = 0;
-
-void thread_set_pending_entry(void (*entry)(void)) {
-    pending_entry = entry;
-}
 void thread_trampoline(void) {
     __asm__ volatile ("sti");
-    if (pending_entry) {
-        pending_entry();
+    struct thread *t = thread_current();
+    if (t && t->entry) {
+        t->entry();
+        thread_exit();
     }
-    thread_exit();
+    for (;;) {
+        __asm__ volatile ("sti; hlt");
+    }
+}
+void set_current_thread(struct thread *t) {
+    current_thread = t;
 }
 
 struct thread *thread_create(const char *name, void (*entry)(void)) {
@@ -68,9 +73,11 @@ struct thread *thread_create(const char *name, void (*entry)(void)) {
     t->state = THREAD_READY;
     t->stack_base = stack;
     t->stack_size = THREAD_STACK_SIZE;
+    t->budget = 10;
     t->process = 0;
     t->next = 0;
     t->total_ticks = 0;
+    t->entry = entry;
 
     uint64_t stack_top = (uint64_t)stack + THREAD_STACK_SIZE;
 
@@ -90,15 +97,17 @@ struct thread *thread_create(const char *name, void (*entry)(void)) {
 }
 
 void thread_exit(void) {
-    struct thread *t = current_thread;
+    struct thread *t = thread_current();
     if (t) {
         t->state = THREAD_TERMINATED;
         kprintf("  THREAD: '%s' (id=%d) exiting\n", t->name, (uint64_t)t->id);
     }
 
-    /* TODO session 12.4: schedule() instead of halting */
+    __asm__ volatile ("cli");
+    schedule();
+
     for (;;) {
-        __asm__ volatile ("cli; hlt");
+        __asm__ volatile ("hlt");
     }
 }
 
