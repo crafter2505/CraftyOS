@@ -1,7 +1,7 @@
 ASM      := nasm
 ASMFLAGS := -f bin
 CC       := gcc
-CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -c
+CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -Ikernel -c
 LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 
@@ -10,7 +10,8 @@ LOG 	   := qemu.log
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
 
-KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c kernel/line.c kernel/memory_map.c kernel/pmm.c kernel/fault.c kernel/vmm.c kernel/buddy.c kernel/slab.c kernel/kmalloc.c kernel/page.c kernel/interrupts.asm kernel/thread.c kernel/process.c kernel/sched.c kernel/switch_test.c kernel/switch.asm
+KERNEL_TEST_SRCS := $(wildcard kernel/tests/*.c)
+KERNEL_SRCS := kernel/kernel.c kernel/vga.c kernel/terminal.c kernel/kprintf.c kernel/pic.c kernel/idt.c kernel/isr.c kernel/timer.c kernel/keyboard.c kernel/line.c kernel/memory_map.c kernel/pmm.c kernel/fault.c kernel/vmm.c kernel/buddy.c kernel/slab.c kernel/kmalloc.c kernel/page.c kernel/interrupts.asm kernel/thread.c kernel/process.c kernel/sched.c $(KERNEL_TEST_SRCS) kernel/switch.asm
 KERNEL_C_SRCS := $(filter %.c,$(KERNEL_SRCS))
 KERNEL_ASM_SRCS := $(filter %.asm,$(KERNEL_SRCS))
 KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_C_SRCS)) \
@@ -26,7 +27,7 @@ KERNEL_SECTOR := 40
 all: $(IMG)
 
 build:
-	mkdir -p build build/kernel
+	mkdir -p build
 
 $(STAGE1_BIN): $(STAGE1) | build
 	$(ASM) $(ASMFLAGS) $< -o $@
@@ -35,9 +36,11 @@ $(STAGE2_BIN): $(STAGE2) bootloader/gdt.asm | build
 	$(ASM) $(ASMFLAGS) $< -o $@
 
 build/kernel/%.o: kernel/%.c Makefile | build
+	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $< -o $@
 
 build/kernel/%.o: kernel/%.asm | build
+	mkdir -p $(dir $@)
 	$(ASM) -f elf64 $< -o $@
 
 $(KERNEL_ELF): $(KERNEL_OBJS) $(KERNEL_LD)

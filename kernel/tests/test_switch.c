@@ -1,5 +1,6 @@
 /* switch_test.c - round-trip test for context switching */
 
+#include "tests.h"
 #include "switch_test.h"
 #include "thread.h"
 #include "kprintf.h"
@@ -63,7 +64,7 @@ done:
     for (;;) __asm__ volatile ("cli; hlt");
 }
 
-void switch_test(void) {
+void test_switch(void) {
     kprintf("\n=== switch_to round-trip test ===\n");
 
     /* Zero both contexts */
@@ -111,4 +112,8 @@ void switch_test(void) {
                 b_failed_reg, b_got_value, b_expected_value);
         kprintf("=== switch_to test FAILED ===\n\n");
     }
+}
+
+void switch_test(void) {
+    test_switch();
 }
