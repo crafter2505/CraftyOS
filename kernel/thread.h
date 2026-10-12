@@ -2,10 +2,11 @@
 #define THREAD_H
 #include "types.h"
 
-#define THREAD_READY 0
-#define THREAD_RUNNING 1
-#define THREAD_BLOCKED 2
-#define THREAD_TERMINATED 3
+#define THREAD_READY        0
+#define THREAD_RUNNING      1
+#define THREAD_BLOCKED      2
+#define THREAD_SLEEPING     3
+#define THREAD_TERMINATED   4
 
 #define THREAD_STACK_SIZE (16 * 1024) // 16 KiB
 #define THREAD_NAME_LEN 16
@@ -48,6 +49,7 @@ struct thread {
     struct thread *next;
     struct thread *next_dead;
     uint64_t total_ticks;
+    uint64_t wake_at_tick;
 };
 
 void thread_init_subsystem(void);

@@ -14,5 +14,8 @@ void sched_dump(void);
 void yield(void);
 void sched_idle_loop(void) __attribute__((noreturn));
 void sched_unlink_current(void);
+void sched_block(void);
+void sched_wake(struct thread *t);
+void sched_sleep(uint64_t ticks);
 
 #endif

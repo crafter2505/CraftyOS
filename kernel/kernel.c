@@ -22,6 +22,10 @@ static volatile int reap_test_counter = 0;
 
 static int test_counter = 0;
 static volatile int test_finished = 0;
+static volatile int test_waiter_ran = 0;
+static volatile int test_waker_ran = 0;
+static volatile int test_sleeper_ran = 0;
+static struct thread *g_waiter = 0;
 
 void reap_test_thread(void) {
     __asm__ volatile ("sti");
@@ -81,12 +85,72 @@ void test_thread_entry(void) {
     test_finished = 1;
 }
 
+static void test_waiter(void) {
+    __asm__ volatile ("sti");
+    kprintf("  [waiter] blocking...\n");
+    sched_block();
+    kprintf("  [waiter] resumed!\n");
+    test_waiter_ran = 1;
+    thread_exit();
+}
+
+static void test_waker(void) {
+    __asm__ volatile ("sti");
+    kprintf("  [waker] sleeping 30 ticks...\n");
+    sched_sleep(30);
+    kprintf("  [waker] waking waiter\n");
+    if (g_waiter) sched_wake(g_waiter);
+    test_waker_ran = 1;
+    thread_exit();
+}
+
+static void test_sleeper(void) {
+    __asm__ volatile ("sti");
+    kprintf("  [sleeper] sleeping 10 ticks...\n");
+    sched_sleep(10);
+    kprintf("  [sleeper] woke after 10 ticks\n");
+    test_sleeper_ran = 1;
+    thread_exit();
+}
+
+static void run_block_wake_test(void) {
+    kprintf("\n=== block/wake/sleep test ===\n");
+
+    g_waiter = thread_create("waiter", test_waiter);
+    if (g_waiter) sched_add(g_waiter);
+
+    yield();
+    yield();
+
+    struct thread *sleeper = thread_create("sleeper", test_sleeper);
+    if (sleeper) sched_add(sleeper);
+
+    struct thread *waker = thread_create("waker", test_waker);
+    if (waker) sched_add(waker);
+
+    while (!test_waiter_ran || !test_waker_ran || !test_sleeper_ran) {
+        yield();
+    }
+
+    kprintf("  waiter=%d waker=%d sleeper=%d\n",
+            (uint64_t)test_waiter_ran,
+            (uint64_t)test_waker_ran,
+            (uint64_t)test_sleeper_ran);
+
+    if (test_waiter_ran && test_waker_ran && test_sleeper_ran) {
+        kprintf("  PASS: block/wake/sleep all worked\n");
+    } else {
+        kprintf("  FAIL\n");
+    }
+    kprintf("=== block/wake/sleep test done ===\n\n");
+}
+
 void _start(void) {
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.12.4\n");
+    kprintf("craftyOS v0.12.5\n");
     kprintf("=======================\n\n");
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -317,7 +381,6 @@ void _start(void) {
     thread_dump_all();
     process_dump_all();
 
-    /* Create a thread to verify allocation and context before scheduling it. */
     struct thread *test_thread = thread_create("test", test_thread_entry);
     if (test_thread) {
         kprintf("  TEST: created thread id=%d state=%d\n",
@@ -339,7 +402,6 @@ void _start(void) {
         kprintf("  [1] FAIL: thread_create returned NULL\n");
     }
 
-    /* Verify stack is in the direct-map region (kmalloc path) */
     if (test_thread) {
         uint64_t stack_addr = (uint64_t)test_thread->stack_base;
         if (stack_addr >= DIRECT_MAP_BASE &&
@@ -353,16 +415,7 @@ void _start(void) {
     thread_dump_all();
 
     switch_test();
-    
-
-
-    vmm_init();
-
-    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("[OK] ");
-    terminal_set_color(VGA_WHITE, VGA_BLACK);
-    kprintf("Virtual memory manager ready\n");
-
+    run_block_wake_test();
 
     vmm_init();
 

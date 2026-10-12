@@ -32,6 +32,7 @@ void thread_init_subsystem(void) {
     boot->process = 0;
     boot->next = 0;
     boot->total_ticks = 0;
+    boot->wake_at_tick = 0;
     current_thread = boot;
     total_threads_created++;
 
@@ -79,6 +80,7 @@ struct thread *thread_create(const char *name, void (*entry)(void)) {
     t->next = 0;
     t->total_ticks = 0;
     t->entry = entry;
+    t->wake_at_tick = 0;
 
     uint64_t stack_top = (uint64_t)stack + THREAD_STACK_SIZE;
 

@@ -2,6 +2,7 @@
 #include "thread.h"
 #include "kmalloc.h"
 #include "kprintf.h"
+#include "timer.h"
 
 static struct thread *idle_thread = 0;
 
@@ -102,9 +103,66 @@ void schedule(void) {
     switch_to(&cur->ctx, &next->ctx);
 }
 
+void sched_block(void) {
+    struct thread *cur = thread_current();
+    if (!cur) return;
+    cur->state = THREAD_BLOCKED;
+    schedule();
+}
+
+void shced_wake(struct thread *t) {
+    if (!t) return;
+    if (t->state == THREAD_BLOCKED || t-> state == THREAD_SLEEPING) {
+        t->state = THREAD_READY;
+        t->wake_at_tick = 0;
+    }
+}
+
+void sched_sleep(uint64_t ticks) {
+    struct thread *cur = thread_current();
+    if (!cur) return;
+    if (ticks == 0) {
+        schedule();
+        return;
+
+        cur->wake_at_tick = timer_get_ticks() + ticks;
+        cur->state = THREAD_READY;
+        schedule();
+        cur->wake_at_tick = 0;
+    }
+}
+
+void sched_wake(struct thread *t) {
+    if (!t) return;
+
+    if (t->state == THREAD_BLOCKED || t->state == THREAD_SLEEPING) {
+        t->state = THREAD_READY;
+        t->wake_at_tick = 0;
+    }
+}
+
+void sched_check_sleepers(void) {
+    struct thread *cur = thread_current();
+    if (!cur) return;
+    uint64_t now = timer_get_ticks();
+    struct thread *t = cur->next;
+    while (t && t != cur) {
+        if (t->state == THREAD_SLEEPING && t->wake_at_tick <= now) {
+            t->state = THREAD_READY;
+            t->wake_at_tick = 0;
+        }
+        t = t->next;
+    }
+    if (cur->state == THREAD_SLEEPING && cur->wake_at_tick <= now) {
+        cur->state = THREAD_READY;
+        cur->wake_at_tick = 0;
+    }
+}
+
 void sched_tick(void) {
     struct thread *cur = thread_current();
     if (!cur) return;
+    sched_check_sleepers();
     cur->total_ticks++;
     if (cur->budget > 0) cur->budget--;
     if (cur->budget == 0) {
