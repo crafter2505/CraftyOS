@@ -22,6 +22,7 @@ void thread_init_subsystem(void) {
     boot->id = next_thread_id++;
     boot->budget = 10;
     boot->entry = 0;
+    boot->arg = 0;
     const char *bn = "boot";
     int i = 0;
     while (bn[i] && i < THREAD_NAME_LEN -1) {boot->name[i] = bn[i]; i++;}
@@ -43,7 +44,7 @@ void thread_trampoline(void) {
     __asm__ volatile ("sti");
     struct thread *t = thread_current();
     if (t && t->entry) {
-        t->entry();
+        t->entry(t->arg);
         thread_exit();
     }
     /* No entry = idle thread. */
@@ -54,7 +55,7 @@ void set_current_thread(struct thread *t) {
     current_thread = t;
 }
 
-struct thread *thread_create(const char *name, void (*entry)(void)) {
+struct thread *thread_create(const char *name, void (*entry)(void *), void *arg) {
     struct thread *t = (struct thread *)kmalloc(sizeof(struct thread));
     if (!t) return 0;
 
@@ -80,6 +81,7 @@ struct thread *thread_create(const char *name, void (*entry)(void)) {
     t->next = 0;
     t->total_ticks = 0;
     t->entry = entry;
+    t->arg = arg;
     t->wake_at_tick = 0;
 
     uint64_t stack_top = (uint64_t)stack + THREAD_STACK_SIZE;

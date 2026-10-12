@@ -10,5 +10,9 @@ void run_all_tests(void) {
     test_sched();
     test_block();
     test_vmm();
+    test_stress();
+    test_fairness();
+    test_sleep_accuracy();
+    test_wake_order();
     kprintf("\n=== all tests completed ===\n\n");
 }

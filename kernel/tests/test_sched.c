@@ -6,7 +6,8 @@
 
 static volatile int reap_test_counter;
 
-static void reap_test_thread(void) {
+static void reap_test_thread(void *arg) {
+    (void)arg;
     __asm__ volatile ("sti");
     reap_test_counter++;
     thread_exit();
@@ -20,7 +21,7 @@ void test_sched(void) {
 
     int failed = 0;
     for (int i = 0; i < 10; i++) {
-        struct thread *t = thread_create("worker", reap_test_thread);
+        struct thread *t = thread_create("worker", reap_test_thread, 0);
         if (!t) {
             kprintf("  FAIL: unable to create worker thread\n");
             failed = 1;

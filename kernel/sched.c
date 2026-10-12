@@ -7,7 +7,7 @@
 static struct thread *idle_thread = 0;
 
 void sched_init(void) {
-    idle_thread = thread_create("idle", 0);
+    idle_thread = thread_create("idle", 0, 0);
     if (!idle_thread) {
         kprintf(" SCHED: failed to create idle thread\n");
         return;
@@ -124,12 +124,11 @@ void sched_sleep(uint64_t ticks) {
     if (ticks == 0) {
         schedule();
         return;
-
-        cur->wake_at_tick = timer_get_ticks() + ticks;
-        cur->state = THREAD_READY;
-        schedule();
-        cur->wake_at_tick = 0;
     }
+
+    cur->wake_at_tick = timer_get_ticks() + ticks;
+    cur->state = THREAD_SLEEPING;
+    schedule();
 }
 
 void sched_wake(struct thread *t) {

@@ -9,7 +9,8 @@
 static int test_counter;
 static volatile int test_finished;
 
-static void test_thread_entry(void) {
+static void test_thread_entry(void *arg) {
+    (void)arg;
     for (int i = 0; i < 5; i++) {
         test_counter++;
         kprintf("  [test] counter=%d\n", (uint64_t)test_counter);
@@ -26,7 +27,7 @@ void test_thread(void) {
     thread_dump_all();
     process_dump_all();
 
-    struct thread *test_thread = thread_create("test", test_thread_entry);
+    struct thread *test_thread = thread_create("test", test_thread_entry, 0);
     if (test_thread) {
         kprintf("  TEST: created thread id=%d state=%d\n",
                 (uint64_t)test_thread->id,

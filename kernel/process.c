@@ -33,7 +33,7 @@ void process_init_subsystem(void) {
     kprintf(" PROCESS: kernel process pid=%d created (pml4=0x%x)\n", (uint64_t)kproc->pid, kproc->pml4_phys);
 }
 
-struct process *process_create(const char *name, void (*entry)(void)) {
+struct process *process_create(const char *name, void (*entry)(void *), void *arg) {
     struct process *proc = (struct process *)kmalloc(sizeof(struct process));
     if (!proc) return 0;
 
@@ -54,7 +54,7 @@ struct process *process_create(const char *name, void (*entry)(void)) {
     proc->total_ticks = 0;
 
     /* Create the initial thread for this process */
-    struct thread *t = thread_create(name, entry);
+    struct thread *t = thread_create(name, entry, arg);
     if (!t) {
         kfree(proc);
         return 0;

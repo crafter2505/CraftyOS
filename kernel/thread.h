@@ -44,7 +44,8 @@ struct thread {
     struct thread_context ctx;
     uint32_t budget;
     uint32_t _pad2;
-    void (*entry)(void);
+    void (*entry)(void *);
+    void *arg;
     struct process *process;
     struct thread *next;
     struct thread *next_dead;
@@ -53,7 +54,7 @@ struct thread {
 };
 
 void thread_init_subsystem(void);
-struct thread *thread_create(const char *name, void(*entry)(void));
+struct thread *thread_create(const char *name, void (*entry)(void *), void *arg);
 void thread_exit(void) __attribute__((noreturn));
 struct thread *thread_current(void);
 uint64_t thread_count_total(void);

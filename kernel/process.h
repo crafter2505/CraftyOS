@@ -18,7 +18,7 @@ struct process {
 };
 
 void process_init_subsystem(void);
-struct process *process_create(const char *name, void (*entry)(void));
+struct process *process_create(const char *name, void (*entry)(void *), void *arg);
 struct process *process_current(void);
 void process_dump_all(void);
 
