@@ -30,7 +30,7 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.12.6\n");
+    kprintf("craftyOS v0.12.0\n");
     kprintf("=======================\n\n");
 
     print_ok("VGA driver initialized");
@@ -71,10 +71,14 @@ void _start(void) {
     pic_clear_mask(1);
 
     __asm__ volatile ("sti");
-
+    
+    kprintf("\n");
+    terminal_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
+    kprintf("---Running Self-Test---");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
     run_all_tests();
 
-    terminal_set_color(VGA_GREEN, VGA_BLACK);
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
     kprintf("\ncraftyOS> ");
 
     for (;;) {

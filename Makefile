@@ -57,7 +57,11 @@ run: $(IMG)
 runlog: $(IMG)
 	qemu-system-x86_64 -drive format=raw,file=$(IMG) -d int,cpu_reset -D $(LOG)
 
+remake:
+	$(MAKE) clean
+	$(MAKE) all
+
 clean:
 	rm -rf build $(IMG) $(LOG)
 
-.PHONY: all build run runlog clean
+.PHONY: all build run runlog remake clean

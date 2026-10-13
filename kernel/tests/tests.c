@@ -1,5 +1,6 @@
 #include "tests.h"
 #include "kprintf.h"
+#include "terminal.h"
 
 void run_all_tests(void) {
     test_paging();
@@ -14,5 +15,6 @@ void run_all_tests(void) {
     test_fairness();
     test_sleep_accuracy();
     test_wake_order();
+    terminal_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
     kprintf("\n=== all tests completed ===\n\n");
 }
