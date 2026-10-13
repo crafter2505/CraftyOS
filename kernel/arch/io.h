@@ -10,6 +10,18 @@ static inline unsigned char inb(unsigned short port) {
     return result;
 }
 
+static inline void wrmsr(unsigned int msr, unsigned long long value) {
+    unsigned int lo = (unsigned int)(value & 0xFFFFFFFF);
+    unsigned int hi = (unsigned int)(value >> 32);
+    __asm__ volatile ("wrmsr" : : "c"(msr), "a"(lo), "d"(hi));
+}
+
+static inline unsigned long long rdmsr(unsigned int msr) {
+    unsigned int lo, hi;
+    __asm__ volatile ("rdmsr" : "=a"(lo), "=d"(hi) : "c"(msr));
+    return ((unsigned long long)hi << 32) | lo;
+}
+
 static inline void io_wait(void) {
     outb(0x80, 0);
 }

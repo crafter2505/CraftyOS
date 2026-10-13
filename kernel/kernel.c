@@ -15,6 +15,7 @@
 #include "thread.h"
 #include "process.h"
 #include "sched.h"
+#include "syscall.h"
 
 #include "tests/tests.h"
 
@@ -30,7 +31,7 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.12.0\n");
+    kprintf("craftyOS v0.13.1\n");
     kprintf("=======================\n\n");
 
     print_ok("VGA driver initialized");
@@ -63,6 +64,9 @@ void _start(void) {
     process_init_subsystem();
     sched_init();
     print_ok("Scheduler initialized");
+
+    syscall_init();
+    print_ok("Syscall mechanism initialized");
 
     line_init();
     print_ok("Line editor ready");
