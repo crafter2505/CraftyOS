@@ -16,6 +16,7 @@
 #include "process.h"
 #include "sched.h"
 #include "syscall.h"
+#include "percpu.h"
 
 #include "tests/tests.h"
 
@@ -64,6 +65,8 @@ void _start(void) {
     process_init_subsystem();
     sched_init();
     print_ok("Scheduler initialized");
+
+    percpu_init();
 
     syscall_init();
     print_ok("Syscall mechanism initialized");

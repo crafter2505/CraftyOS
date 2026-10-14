@@ -3,6 +3,7 @@
 #include "kmalloc.h"
 #include "kprintf.h"
 #include "timer.h"
+#include "percpu.h"
 
 static struct thread *idle_thread = 0;
 
@@ -98,8 +99,10 @@ void schedule(void) {
     if (cur->state == THREAD_RUNNING) cur->state = THREAD_READY;
     next->state = THREAD_RUNNING;
 
-    set_current_thread(next);
+    struct percpu *pc = percpu_get();
+    pc->kernel_stack = (uint64_t)next->stack_base + next->stack_size;
 
+    set_current_thread(next);
     switch_to(&cur->ctx, &next->ctx);
 }
 
