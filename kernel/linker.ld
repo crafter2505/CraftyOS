@@ -28,5 +28,12 @@ SECTIONS
         *(.bss)
     }
 
+    .user_program ALIGN(4096) : AT(ADDR(.user_program) - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE)
+    {
+        _user_program_start = .;
+        *(.user_program)
+        _user_program_end = .;
+    }
+
     kernel_end = .;
 }

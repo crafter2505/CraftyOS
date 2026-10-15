@@ -11,5 +11,6 @@ struct percpu {
 
 struct percpu *percpu_get(void);
 void percpu_init(void);
+void percpu_set_kernel_stack(uint64_t stack);
 
 #endif

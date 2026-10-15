@@ -8,7 +8,7 @@ section .text
 syscall_entry:
     swapgs
     mov [gs:8], rsp
-    mov rsp, [gs:8]
+    mov rsp, [gs:0]
 
     push qword [gs:8]
     push r11
@@ -53,6 +53,19 @@ syscall_entry:
     pop rcx
     pop rbx 
 
+    mov rax, rcx
+    sar rax, 47
+    cmp rax, 0
+    je .canonical
+    cmp rax, -1
+    je .canonical
+.bad_rip:
+    cli
+    hlt
+    jmp .bad_rip
+
+.canonical:
+    mov rax, [rsp]
     add rsp, 8
 
     pop rcx
@@ -60,4 +73,4 @@ syscall_entry:
     pop rsp
 
     swapgs
-    sysretq
+    o64 sysret

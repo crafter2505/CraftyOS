@@ -2,6 +2,7 @@
 #include "kprintf.h"
 #include "sched.h"
 #include "thread.h"
+#include "terminal.h"
 
 static volatile int test_waiter_ran;
 static volatile int test_waker_ran;

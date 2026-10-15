@@ -3,6 +3,7 @@
 #include "address_space.h"
 #include "kprintf.h"
 #include "memory_map.h"
+#include "terminal.h"
 
 static void run_buddy_tests(void) {
     buddy_dump_stats();

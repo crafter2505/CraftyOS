@@ -1,5 +1,8 @@
 align 8
 
+global gdt_start
+global gdt_tss_descriptor
+
 gdt_start:
 
     dd 0x00000000
@@ -41,6 +44,10 @@ gdt_start:
     db 11111010b
     db 10101111b
     db 0x00
+
+gdt_tss_descriptor:
+    dq 0
+    dq 0
 
 gdt_end:
 

@@ -9,6 +9,7 @@
 #define THREAD_TERMINATED   4
 
 #define THREAD_STACK_SIZE (16 * 1024) // 16 KiB
+#define THREAD_SYSCALL_STACK_SIZE (8 * 1024)
 #define THREAD_NAME_LEN 16
 
 struct thread_context {
@@ -41,6 +42,8 @@ struct thread {
     uint32_t _pad;
     void *stack_base;
     uint64_t stack_size;
+    void *syscall_stack;
+    uint64_t syscall_stack_size;
     struct thread_context ctx;
     uint32_t budget;
     uint32_t _pad2;

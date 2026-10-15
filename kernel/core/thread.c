@@ -30,6 +30,12 @@ void thread_init_subsystem(void) {
     boot->state = THREAD_RUNNING;
     boot->stack_base = 0;
     boot->stack_size = 0;
+    boot->syscall_stack = kmalloc(THREAD_SYSCALL_STACK_SIZE);
+    boot->syscall_stack_size = boot->syscall_stack
+                             ? THREAD_SYSCALL_STACK_SIZE : 0;
+    if (!boot->syscall_stack) {
+        kprintf(" THREAD: warning: no syscall stack for boot thread\n");
+    }
     boot->process = 0;
     boot->next = 0;
     boot->total_ticks = 0;
@@ -68,6 +74,13 @@ struct thread *thread_create(const char *name, void (*entry)(void *), void *arg)
         return 0;
     }
 
+    void *syscall_stack = kmalloc(THREAD_SYSCALL_STACK_SIZE);
+    if (!syscall_stack) {
+        kfree(stack);
+        kfree(t);
+        return 0;
+    }
+
     t->id = next_thread_id++;
     int i = 0;
     while (name[i] && i < THREAD_NAME_LEN - 1) { t->name[i] = name[i]; i++; }
@@ -76,6 +89,8 @@ struct thread *thread_create(const char *name, void (*entry)(void *), void *arg)
     t->state = THREAD_READY;
     t->stack_base = stack;
     t->stack_size = THREAD_STACK_SIZE;
+    t->syscall_stack = syscall_stack;
+    t->syscall_stack_size = THREAD_SYSCALL_STACK_SIZE;
     t->budget = 10;
     t->process = 0;
     t->next = 0;
@@ -143,6 +158,9 @@ void thread_reap_pending(void) {
         struct thread *next = list->next_dead;
         if (list->stack_base) {
             kfree(list->stack_base);
+        }
+        if (list->syscall_stack) {
+            kfree(list->syscall_stack);
         }
         kfree(list);
 

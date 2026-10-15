@@ -99,8 +99,11 @@ void schedule(void) {
     if (cur->state == THREAD_RUNNING) cur->state = THREAD_READY;
     next->state = THREAD_RUNNING;
 
-    struct percpu *pc = percpu_get();
-    pc->kernel_stack = (uint64_t)next->stack_base + next->stack_size;
+    uint64_t kernel_stack = next->syscall_stack
+                          ? (uint64_t)next->syscall_stack +
+                                next->syscall_stack_size
+                          : 0x90000;
+    percpu_set_kernel_stack(kernel_stack);
 
     set_current_thread(next);
     switch_to(&cur->ctx, &next->ctx);

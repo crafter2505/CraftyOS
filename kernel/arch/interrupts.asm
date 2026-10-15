@@ -58,6 +58,11 @@ ISR_NOERR 31
 %endrep
 
 isr_common:
+    test byte [rsp + 24], 3
+    jz .no_swapgs
+    swapgs
+.no_swapgs:
+
     push rax
     push rbx
     push rcx
@@ -74,6 +79,7 @@ isr_common:
     push r14
     push r15
 
+    ; Fifteen saved registers place int_no and err_code at +120 and +128.
     mov rdi, [rsp + 120]
     mov rsi, [rsp + 128]
     mov rdx, rsp
@@ -98,6 +104,11 @@ isr_common:
     pop rcx
     pop rbx
     pop rax
+
+    test byte [rsp + 24], 3
+    jz .no_swapgs_out
+    swapgs
+.no_swapgs_out:
 
     add rsp, 16
     iretq

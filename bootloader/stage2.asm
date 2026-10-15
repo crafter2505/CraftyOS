@@ -1,7 +1,7 @@
 BITS 16
 ORG 0x7E00
 
-KERNEL_ELF_BUFFER equ 0x400000
+KERNEL_ELF_BUFFER equ 0x100000
 
 stage2_start:
 
@@ -340,6 +340,12 @@ long_mode_entry:
     mov rdi, r9
     cld
     rep movsb
+
+    mov rcx, [rbx + 40]
+    sub rcx, [rbx + 32]
+    jz .next_segment
+    xor eax, eax
+    rep stosb
 
 .next_segment:
     add rbx, r14

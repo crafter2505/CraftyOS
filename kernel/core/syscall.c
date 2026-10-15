@@ -1,9 +1,8 @@
 #include "syscall.h"
 #include "sched.h"
-#include "thread.h"
 #include "kprintf.h"
 #include "io.h"
-#include "process.h"
+#include "userspace.h"
 
 #define IA32_EFER    0xC0000080
 #define IA32_STAR    0xC0000081
@@ -44,7 +43,7 @@ void syscall_handler(uint64_t sysno, struct registers *regs) {
     switch (sysno) {
     case SYS_exit: {
         kprintf("  [syscall] exit(%d)\n", regs->rdi);
-        regs->rax = 0;
+        userspace_exit_to_kernel();
         break;
     }
     case SYS_write: {
@@ -58,11 +57,9 @@ void syscall_handler(uint64_t sysno, struct registers *regs) {
         regs->rax = 0;
         break;
     }
-    case SYS_getpid: {
-        struct process *p = process_current();
-        regs->rax = p ? p->pid : 0;
+    case SYS_getpid:
+        regs->rax = 1;
         break;
-    }
     default:
         kprintf("  [syscall] unknown syscall %d\n", sysno);
         regs->rax = (uint64_t)-1;

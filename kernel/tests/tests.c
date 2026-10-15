@@ -17,6 +17,8 @@ void run_all_tests(void) {
     test_wake_order();
     test_syscall();
     test_userspace_mem();
+    test_ring3();
+
     terminal_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
     kprintf("\n=== all tests completed ===\n\n");
 }

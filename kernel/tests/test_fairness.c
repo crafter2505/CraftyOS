@@ -1,10 +1,11 @@
-/* test_fairness.c - verify round-robin gives roughly equal CPU time */
-
 #include "tests.h"
 #include "thread.h"
 #include "sched.h"
 #include "timer.h"
 #include "kprintf.h"
+#include "terminal.h"
+
+/* test_fairness.c - verify round-robin gives roughly equal CPU time */
 
 #define FAIRNESS_NUM_THREADS 4
 #define FAIRNESS_DURATION_TICKS 300
@@ -102,8 +103,12 @@ void test_fairness(void) {
     }
 
     if (fair) {
+        terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
         kprintf("  PASS: distribution within tolerance\n");
+        terminal_set_color(VGA_WHITE, VGA_BLACK);
     } else {
+        terminal_set_color(VGA_RED, VGA_BLACK);
         kprintf("  FAIL: uneven distribution\n");
+        terminal_set_color(VGA_WHITE, VGA_BLACK);
     }
 }

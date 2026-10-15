@@ -3,6 +3,7 @@
 #include "kprintf.h"
 #include "page.h"
 #include "slab.h"
+#include "terminal.h"
 
 static void run_kmalloc_tests(void) {
     kprintf("\nkmalloc test:\n");
@@ -12,12 +13,18 @@ static void run_kmalloc_tests(void) {
     if (a) {
         *(uint64_t *)a = 0xAAAAAAAAAAAAAAAAULL;
         if (*(uint64_t *)a == 0xAAAAAAAAAAAAAAAAULL) {
+            terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
             kprintf("  [1] PASS: write/read 8 bytes\n");
+            terminal_set_color(VGA_WHITE, VGA_BLACK);
         } else {
+            terminal_set_color(VGA_RED, VGA_BLACK);
             kprintf("  [1] FAIL: read/write\n");
-        }
+            terminal_set_color(VGA_WHITE, VGA_BLACK);
+            }
     } else {
+        terminal_set_color(VGA_RED, VGA_BLACK);
         kprintf("  [1] FAIL: allocation failed\n");
+        terminal_set_color(VGA_WHITE, VGA_BLACK);
     }
 
     void *b = kzalloc(256);
@@ -30,10 +37,20 @@ static void run_kmalloc_tests(void) {
                 break;
             }
         }
-        if (all_zero) kprintf("  [2] PASS: zeroed\n");
-        else kprintf("  [2] FAIL: not zeroed\n");
+        if (all_zero) { 
+            terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+            kprintf("  [2] PASS: zeroed\n");
+            terminal_set_color(VGA_WHITE, VGA_BLACK);
+        }
+        else {
+            terminal_set_color(VGA_RED, VGA_BLACK);
+            kprintf("  [2] FAIL: not zeroed\n");
+            terminal_set_color(VGA_WHITE, VGA_BLACK);
+        }
     } else {
+        terminal_set_color(VGA_RED, VGA_BLACK);
         kprintf("  [2] FAIL: allocation failed\n");
+        terminal_set_color(VGA_WHITE, VGA_BLACK);
     }
 
     void *c = kmalloc(5000);
@@ -41,12 +58,18 @@ static void run_kmalloc_tests(void) {
     if (c) {
         *(uint64_t *)c = 0xCCCCCCCCCCCCCCCCULL;
         if (*(uint64_t *)c == 0xCCCCCCCCCCCCCCCCULL) {
+            terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
             kprintf("  [3] PASS: large alloc write/read\n");
+            terminal_set_color(VGA_WHITE, VGA_BLACK);
         } else {
+            terminal_set_color(VGA_RED, VGA_BLACK);
             kprintf("  [3] FAIL\n");
+            terminal_set_color(VGA_WHITE, VGA_BLACK);
         }
     } else {
+        terminal_set_color(VGA_RED, VGA_BLACK);
         kprintf("  [3] FAIL: allocation failed\n");
+        terminal_set_color(VGA_WHITE, VGA_BLACK);
     }
 
     if (a) {
@@ -58,12 +81,18 @@ static void run_kmalloc_tests(void) {
             kprintf("      cache = 0x%x\n", (uint64_t)pa->cache);
             if (pa->flags == PAGE_FLAG_SLAB && pa->cache != 0) {
                 kprintf("      cache name = %s\n", pa->cache->name);
+                terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
                 kprintf("  [4] PASS: page metadata populated\n");
+                terminal_set_color(VGA_WHITE, VGA_BLACK);
             } else {
+                terminal_set_color(VGA_RED, VGA_BLACK);
                 kprintf("  [4] FAIL: metadata wrong\n");
+                terminal_set_color(VGA_WHITE, VGA_BLACK);
             }
         } else {
+            terminal_set_color(VGA_RED, VGA_BLACK);
             kprintf("  [4] FAIL: page_from_virt returned NULL\n");
+            terminal_set_color(VGA_WHITE, VGA_BLACK);
         }
     }
 
@@ -76,9 +105,13 @@ static void run_kmalloc_tests(void) {
             kprintf("      order = %d (5000 bytes -> 2 pages -> order=1)\n",
                     pc->order);
             if (pc->flags == PAGE_FLAG_BUDDY_ALLOC && pc->order == 1) {
+                terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
                 kprintf("  [5] PASS: buddy metadata correct\n");
+                terminal_set_color(VGA_WHITE, VGA_BLACK);
             } else {
+                terminal_set_color(VGA_RED, VGA_BLACK);
                 kprintf("  [5] FAIL: buddy metadata wrong\n");
+                terminal_set_color(VGA_WHITE, VGA_BLACK);
             }
         }
     }
@@ -95,8 +128,16 @@ static void run_kmalloc_tests(void) {
             break;
         }
     }
-    if (ok) kprintf("  [6] PASS: 200 varied allocations\n");
-    else kprintf("  [6] FAIL\n");
+    if (ok) {
+        terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+        kprintf("  [6] PASS: 200 varied allocations\n");
+        terminal_set_color(VGA_WHITE, VGA_BLACK);
+    }
+    else {
+        terminal_set_color(VGA_RED, VGA_BLACK);
+        kprintf("  [6] FAIL\n");
+        terminal_set_color(VGA_WHITE, VGA_BLACK);
+    }
     for (int i = 0; i < 200; i++) {
         if (ptrs[i]) kfree(ptrs[i]);
     }
