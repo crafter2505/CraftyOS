@@ -14,11 +14,23 @@ static inline uint64_t *phys_to_ptr(uint64_t phys) {
     return (uint64_t *)(DIRECT_MAP_BASE + phys);
 }
 
-static uint64_t *pt_walk(uint64_t virt, int allocate) {
+/* -----------------------------------------------------------------
+ * Walk the page table hierarchy for `virt`.
+ *
+ * If `allocate` is non-zero, missing intermediate tables are
+ * allocated and linked in. If zero, stop at the first missing entry.
+ *
+ * If `user` is non-zero, intermediate entries are made user-accessible
+ * so ring 3 can access pages under them.
+ * ----------------------------------------------------------------- */
+static uint64_t *pt_walk(uint64_t virt, int allocate, int user) {
     uint64_t pml4_idx = PML4_INDEX(virt);
     uint64_t pdpt_idx = PDPT_INDEX(virt);
     uint64_t pd_idx   = PD_INDEX(virt);
     uint64_t pt_idx   = PT_INDEX(virt);
+
+    uint64_t intermediate_flags = VMM_PRESENT | VMM_WRITABLE;
+    if (user) intermediate_flags |= VMM_USER;
 
     uint64_t pml4_entry = pml4[pml4_idx];
     if (!(pml4_entry & VMM_PRESENT)) {
@@ -27,7 +39,10 @@ static uint64_t *pt_walk(uint64_t virt, int allocate) {
         if (!new_phys) return 0;
         uint64_t *new_table = phys_to_ptr(new_phys);
         for (int i = 0; i < 512; i++) new_table[i] = 0;
-        pml4[pml4_idx] = new_phys | VMM_PRESENT | VMM_WRITABLE;
+        pml4[pml4_idx] = new_phys | intermediate_flags;
+        pml4_entry = pml4[pml4_idx];
+    } else if (user) {
+        pml4[pml4_idx] = pml4_entry | VMM_USER;
         pml4_entry = pml4[pml4_idx];
     }
     uint64_t *pdpt = phys_to_ptr(pml4_entry & 0x000FFFFFFFFFF000ULL);
@@ -39,7 +54,10 @@ static uint64_t *pt_walk(uint64_t virt, int allocate) {
         if (!new_phys) return 0;
         uint64_t *new_table = phys_to_ptr(new_phys);
         for (int i = 0; i < 512; i++) new_table[i] = 0;
-        pdpt[pdpt_idx] = new_phys | VMM_PRESENT | VMM_WRITABLE;
+        pdpt[pdpt_idx] = new_phys | intermediate_flags;
+        pdpt_entry = pdpt[pdpt_idx];
+    } else if (user) {
+        pdpt[pdpt_idx] = pdpt_entry | VMM_USER;
         pdpt_entry = pdpt[pdpt_idx];
     }
     uint64_t *pd = phys_to_ptr(pdpt_entry & 0x000FFFFFFFFFF000ULL);
@@ -51,7 +69,10 @@ static uint64_t *pt_walk(uint64_t virt, int allocate) {
         if (!new_phys) return 0;
         uint64_t *new_table = phys_to_ptr(new_phys);
         for (int i = 0; i < 512; i++) new_table[i] = 0;
-        pd[pd_idx] = new_phys | VMM_PRESENT | VMM_WRITABLE;
+        pd[pd_idx] = new_phys | intermediate_flags;
+        pd_entry = pd[pd_idx];
+    } else if (user) {
+        pd[pd_idx] = pd_entry | VMM_USER;
         pd_entry = pd[pd_idx];
     }
 
@@ -72,9 +93,9 @@ int vmm_map(uint64_t virt, uint64_t phys, uint64_t flags) {
     if ((virt & (VMM_PAGE_SIZE - 1)) != 0) return -1;
     if ((phys & (VMM_PAGE_SIZE - 1)) != 0) return -1;
 
-    uint64_t *entry = pt_walk(virt, 1);
+    int user = (flags & VMM_USER) ? 1 : 0;
+    uint64_t *entry = pt_walk(virt, 1, user);
     if (!entry) return -1;
-
     if (*entry & VMM_HUGE) return -1;
 
     *entry = (phys & 0x000FFFFFFFFFF000ULL) | flags | VMM_PRESENT;
@@ -85,7 +106,7 @@ int vmm_map(uint64_t virt, uint64_t phys, uint64_t flags) {
 
 void vmm_unmap(uint64_t virt) {
     if ((virt & (VMM_PAGE_SIZE - 1)) != 0) return;
-    uint64_t *entry = pt_walk(virt, 0);
+    uint64_t *entry = pt_walk(virt, 0, 0);
     if (!entry) return;
     if (!(*entry & VMM_PRESENT)) return;
     *entry = 0;
@@ -208,4 +229,35 @@ void vmm_test(void) {
 
 void vmm_invlpg(uint64_t virt) {
     __asm__ volatile ("invlpg (%0)" : : "r"(virt) : "memory");
+}
+
+/* Convenience: map a page for user access. */
+int vmm_map_user(uint64_t virt, uint64_t phys, uint64_t flags) {
+    return vmm_map(virt, phys, flags | VMM_USER);
+}
+
+/* Return whether every present page-table level permits user access. */
+int vmm_is_user_accessible(uint64_t virt) {
+    uint64_t pml4_entry = pml4[PML4_INDEX(virt)];
+    if (!(pml4_entry & VMM_PRESENT)) return 0;
+    if (!(pml4_entry & VMM_USER)) return 0;
+
+    uint64_t *pdpt = phys_to_ptr(pml4_entry & 0x000FFFFFFFFFF000ULL);
+    uint64_t pdpt_entry = pdpt[PDPT_INDEX(virt)];
+    if (!(pdpt_entry & VMM_PRESENT)) return 0;
+    if (!(pdpt_entry & VMM_USER)) return 0;
+    if (pdpt_entry & VMM_HUGE) return 1;
+
+    uint64_t *pd = phys_to_ptr(pdpt_entry & 0x000FFFFFFFFFF000ULL);
+    uint64_t pd_entry = pd[PD_INDEX(virt)];
+    if (!(pd_entry & VMM_PRESENT)) return 0;
+    if (!(pd_entry & VMM_USER)) return 0;
+    if (pd_entry & VMM_HUGE) return 1;
+
+    uint64_t *pt = phys_to_ptr(pd_entry & 0x000FFFFFFFFFF000ULL);
+    uint64_t pt_entry = pt[PT_INDEX(virt)];
+    if (!(pt_entry & VMM_PRESENT)) return 0;
+    if (!(pt_entry & VMM_USER)) return 0;
+
+    return 1;
 }

@@ -17,6 +17,8 @@
 void vmm_init(void);
 
 int vmm_map(uint64_t virt, uint64_t phys, uint64_t flags);
+int vmm_map_user(uint64_t virt, uint64_t phys, uint64_t flags);
+int vmm_is_user_accessible(uint64_t virt);
 
 void vmm_unmap(uint64_t virt);
 
