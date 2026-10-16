@@ -14,3 +14,28 @@ void test_ring3(void) {
         kprintf("  FAIL: userspace_run_embedded returned %d\n", (uint64_t)rv);
     }
 }
+
+static void test_syscall_validation(void) {
+    kprintf("\n=== syscall validation test ===\n");
+
+    uint64_t kernel_addr = 0xFFFFFFFF80000000ULL;
+    uint64_t ret;
+
+    __asm__ volatile (
+        "mov $1, %%rax\n"
+        "mov $1, %%rdi\n"
+        "mov %1, %%rsi\n"
+        "mov $16, %%rdx\n"
+        "syscall\n"
+        "mov %%rax, %0\n"
+        : "=r"(ret)
+        : "r"(kernel_addr)
+        : "rax", "rdi", "rsi", "rdx", "rcx", "r11", "memory"
+    );
+
+    if (ret == (uint64_t)-1) {
+        kprintf("  PASS: kernel address rejected (ret=-1)\n");
+    } else {
+        kprintf("  FAIL: expected -1, got %d\n", ret);
+    }
+}

@@ -231,12 +231,10 @@ void vmm_invlpg(uint64_t virt) {
     __asm__ volatile ("invlpg (%0)" : : "r"(virt) : "memory");
 }
 
-/* Convenience: map a page for user access. */
 int vmm_map_user(uint64_t virt, uint64_t phys, uint64_t flags) {
     return vmm_map(virt, phys, flags | VMM_USER);
 }
 
-/* Return whether every present page-table level permits user access. */
 int vmm_is_user_accessible(uint64_t virt) {
     uint64_t pml4_entry = pml4[PML4_INDEX(virt)];
     if (!(pml4_entry & VMM_PRESENT)) return 0;
@@ -258,6 +256,23 @@ int vmm_is_user_accessible(uint64_t virt) {
     uint64_t pt_entry = pt[PT_INDEX(virt)];
     if (!(pt_entry & VMM_PRESENT)) return 0;
     if (!(pt_entry & VMM_USER)) return 0;
+
+    return 1;
+}
+
+int vmm_is_user_range(uint64_t ptr, uint64_t len) {
+    if (len == 0) return 1;
+    if (ptr + len < ptr) return 0;
+    if (ptr >= USER_SPACE_MAX) return 0;
+    if (ptr + len > USER_SPACE_MAX) return 0;
+        uint64_t start_page = ptr & ~0xFFFULL;
+    uint64_t end_page   = (ptr + len - 1) & ~0xFFFULL;
+
+    for (uint64_t p = start_page; p <= end_page; p += 0x1000) {
+        if (!vmm_is_user_accessible(p)) {
+            return 0;
+        }
+    }
 
     return 1;
 }

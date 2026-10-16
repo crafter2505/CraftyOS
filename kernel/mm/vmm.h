@@ -14,11 +14,14 @@
 #define VMM_KERNEL_RO   (VMM_PRESENT)
 #define VMM_USER_RW     (VMM_PRESENT | VMM_WRITABLE | VMM_USER)
 
+#define USER_SPACE_MAX  0x0000800000000000ULL
+
 void vmm_init(void);
 
 int vmm_map(uint64_t virt, uint64_t phys, uint64_t flags);
 int vmm_map_user(uint64_t virt, uint64_t phys, uint64_t flags);
 int vmm_is_user_accessible(uint64_t virt);
+int vmm_is_user_range(uint64_t ptr, uint64_t len);
 
 void vmm_unmap(uint64_t virt);
 
