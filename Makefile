@@ -6,7 +6,8 @@ LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 
 IMG        := CraftyOS.img
-LOG 	   := qemu.log 
+LOG        := qemu.log
+SERIAL_LOG := serial.log
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
 
@@ -52,16 +53,16 @@ $(IMG): $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_ELF)
 	dd if=$(KERNEL_ELF) of=$@ bs=512 seek=$(KERNEL_SECTOR) conv=notrunc 2>/dev/null
 
 run: $(IMG)
-	qemu-system-x86_64 -drive format=raw,file=$(IMG)
+	qemu-system-x86_64 -drive format=raw,file=$(IMG) -serial file:$(SERIAL_LOG)
 
 runlog: $(IMG)
-	qemu-system-x86_64 -drive format=raw,file=$(IMG) -d int,cpu_reset -D $(LOG)
+	qemu-system-x86_64 -drive format=raw,file=$(IMG) -serial file:$(SERIAL_LOG) -d int,cpu_reset -D $(LOG)
 
 remake:
 	$(MAKE) clean
 	$(MAKE) all
 
 clean:
-	rm -rf build $(IMG) $(LOG)
+	rm -rf build $(IMG) $(LOG) $(SERIAL_LOG)
 
 .PHONY: all build run runlog remake clean

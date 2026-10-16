@@ -2,9 +2,11 @@
 #include "vga.h"
 #include "terminal.h"
 #include <stdarg.h>
+#include "serial.h"
 
 static void kputchar(char c) {
     terminal_putchar(c);
+    serial_putchar(c);
 }
 
 static void kputs(const char *s) {

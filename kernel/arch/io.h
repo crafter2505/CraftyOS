@@ -26,4 +26,8 @@ static inline void io_wait(void) {
     outb(0x80, 0);
 }
 
+static inline void outl(unsigned short port, unsigned int value) {
+    __asm__ volatile ("outl %0, %1" : : "a"(value), "Nd"(port));
+}
+
 #endif

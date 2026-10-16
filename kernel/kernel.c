@@ -6,6 +6,7 @@
 #include "keyboard.h"
 #include "line.h"
 #include "memory_map.h"
+#include "serial.h"
 
 #include "pmm.h"
 #include "buddy.h"
@@ -28,6 +29,7 @@ static void print_ok(const char *msg) {
 }
 
 void _start(void) {
+    serial_init();
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
