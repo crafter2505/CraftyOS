@@ -5,6 +5,8 @@
 #include "userspace.h"
 #include "vmm.h"
 #include "terminal.h"
+#include "process.h"
+#include "thread.h"
 
 #define IA32_EFER    0xC0000080
 #define IA32_STAR    0xC0000081
@@ -59,9 +61,31 @@ static int64_t sys_write(int fd, uint64_t buf, uint64_t len) {
 
 void syscall_handler(uint64_t sysno, struct registers *regs) {
     switch (sysno) {
-    case SYS_exit: {
-        kprintf("  [syscall] exit(%d)\n", regs->rdi);
-        userspace_exit_to_kernel();
+    case SYS_exit:
+        thread_exit();
+        break;
+    case SYS_process_exit:
+        process_exit((uint32_t)regs->rdi);
+        break;
+    case SYS_getpid: {
+        struct process *p = process_current();
+        regs->rax = p ? p->pid : 0;
+        break;
+    }
+    case SYS_getppid: {
+        struct process *p = process_current();
+        regs->rax = (p && p->parent) ? p->parent->pid : 0;
+        break;
+    }
+    case SYS_wait: {
+        pid_t pid = (pid_t)regs->rdi;
+        uint32_t status = 0;
+        int ret = process_wait(pid, &status);
+        if (ret == 0) {
+            regs->rax = status;
+        } else {
+            regs->rax = (uint64_t)-1;
+        }
         break;
     }
     case SYS_write: {
@@ -76,9 +100,6 @@ void syscall_handler(uint64_t sysno, struct registers *regs) {
         regs->rax = 0;
         break;
     }
-    case SYS_getpid:
-        regs->rax = 1;
-        break;
     default:
         kprintf("  [syscall] unknown syscall %d\n", sysno);
         regs->rax = (uint64_t)-1;

@@ -20,6 +20,7 @@ void run_all_tests(void) {
 //    test_ring3();
 //    test_user_fault();
     test_isolation();
+    test_process_lifecycle();
 
     terminal_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
     kprintf("\n=== all tests completed ===\n\n");

@@ -3,6 +3,7 @@
 #include "terminal.h"
 #include <stdarg.h>
 #include "serial.h"
+#include "types.h"
 
 static void kputchar(char c) {
     terminal_putchar(c);
@@ -41,6 +42,9 @@ static void print_int(long value) {
 }
 
 void kprintf(const char *fmt, ...) {
+    uint64_t flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
+
     va_list args;
     va_start(args, fmt);
 
@@ -87,8 +91,7 @@ void kprintf(const char *fmt, ...) {
             break;
         }
         case '\0': {
-            va_end(args);
-            return;
+            goto done;
         }
         default: {
              kputchar('%');
@@ -98,5 +101,9 @@ void kprintf(const char *fmt, ...) {
         }
         fmt++;
     }
+done:
     va_end(args);
+    if (flags & 0x200) {
+        __asm__ volatile ("sti" : : : "memory");
+    }
 }

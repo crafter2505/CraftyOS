@@ -12,6 +12,9 @@ struct process {
     uint32_t _pad;
     uint64_t pml4_phys;
     uint64_t last_code_phys;
+    uint32_t exit_status;
+    uint32_t exit_called;
+    struct thread *waiting_parent_thread;
     struct thread *threads;
     struct process *parent;
     struct process *next;
@@ -21,6 +24,9 @@ struct process {
 void process_init_subsystem(void);
 struct process *process_create(const char *name, void (*entry)(void *), void *arg);
 struct process *process_current(void);
+void process_exit(uint32_t status) __attribute__((noreturn));
+int process_wait(pid_t pid, uint32_t *status_out);
+void process_free_address_space(uint64_t pml4_phys);
 void process_dump_all(void);
 
 
