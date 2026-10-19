@@ -11,6 +11,7 @@ struct process {
     uint32_t state;
     uint32_t _pad;
     uint64_t pml4_phys;
+    uint64_t last_code_phys;
     struct thread *threads;
     struct process *parent;
     struct process *next;

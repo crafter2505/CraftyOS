@@ -10,6 +10,12 @@ static struct thread *dead_list = 0;
 
 static struct thread * current_thread = 0;
 
+void thread_enqueue_dead(struct thread *t) {
+    if (!t) return;
+    t->next_dead = dead_list;
+    dead_list = t;
+}
+
 void thread_init_subsystem(void) {
     struct thread *boot = (struct thread *)kmalloc(sizeof(struct thread));
     if (!boot) {
@@ -53,7 +59,6 @@ void thread_trampoline(void) {
         t->entry(t->arg);
         thread_exit();
     }
-    /* No entry = idle thread. */
     sched_idle_loop();
     for (;;) __asm__ volatile ("cli; hlt");
 }
@@ -92,7 +97,7 @@ struct thread *thread_create(const char *name, void (*entry)(void *), void *arg)
     t->syscall_stack = syscall_stack;
     t->syscall_stack_size = THREAD_SYSCALL_STACK_SIZE;
     t->budget = 10;
-    t->process = 0;
+    t->process = process_current();
     t->next = 0;
     t->total_ticks = 0;
     t->entry = entry;
@@ -124,8 +129,7 @@ void thread_exit(void) {
         t->state = THREAD_TERMINATED;
         kprintf("  THREAD: '%s' (id=%d) exiting\n", t->name, (uint64_t)t->id);
         sched_unlink_current();
-        t->next_dead = dead_list;
-        dead_list = t;
+        thread_enqueue_dead(t);
     }
 
     schedule();
@@ -166,6 +170,14 @@ void thread_reap_pending(void) {
 
         list = next;
     }
+}
+
+void thread_mark_dead_and_unlink(void) {
+    struct thread *t = thread_current();
+    if (!t) return;
+    t->state = THREAD_TERMINATED;
+    sched_unlink_current();
+    thread_enqueue_dead(t);
 }
 
 void thread_dump_all(void) {

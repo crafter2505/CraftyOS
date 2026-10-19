@@ -8,12 +8,11 @@
 #define THREAD_SLEEPING     3
 #define THREAD_TERMINATED   4
 
-#define THREAD_STACK_SIZE (16 * 1024) // 16 KiB
+#define THREAD_STACK_SIZE (16 * 1024)
 #define THREAD_SYSCALL_STACK_SIZE (8 * 1024)
 #define THREAD_NAME_LEN 16
 
 struct thread_context {
-    /* General-purpose registers */
     uint64_t r15;
     uint64_t r14;
     uint64_t r13;
@@ -29,10 +28,20 @@ struct thread_context {
     uint64_t rcx;
     uint64_t rbx;
     uint64_t rax;
-    /* Control state */
-    uint64_t rip;         /* where the thread resumes */
+    uint64_t rip;
     uint64_t rflags;
-    uint64_t rsp;         /* thread's own stack pointer */
+    uint64_t rsp;
+};
+
+struct kernel_continuation {
+    uint64_t rsp;
+    uint64_t rbp;
+    uint64_t rbx;
+    uint64_t r12;
+    uint64_t r13;
+    uint64_t r14;
+    uint64_t r15;
+    uint64_t rip;
 };
 
 struct thread {
@@ -45,6 +54,7 @@ struct thread {
     void *syscall_stack;
     uint64_t syscall_stack_size;
     struct thread_context ctx;
+    struct kernel_continuation user_continuation;
     uint32_t budget;
     uint32_t _pad2;
     void (*entry)(void *);
@@ -64,8 +74,8 @@ uint64_t thread_count_total(void);
 void thread_dump_all(void);
 void set_current_thread(struct thread *t);
 void thread_reap_pending(void);
+void thread_mark_dead_and_unlink(void);
 
-/* From kernel/switch.asm */
 extern void switch_to(struct thread_context *old_ctx, struct thread_context *new_ctx);
 
 

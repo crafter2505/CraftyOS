@@ -3,6 +3,7 @@
 #include "kprintf.h"
 #include "kmalloc.h"
 #include "address_space.h"
+#include "vmm.h"
 
 static pid_t next_pid = 1;
 static struct process *process_list = 0;
@@ -30,6 +31,8 @@ void process_init_subsystem(void) {
     process_list = kproc;
     kproc->total_ticks = 0;
     current_process = kproc;
+    struct thread *boot_thread = thread_current();
+    if (boot_thread) boot_thread->process = kproc;
     kprintf(" PROCESS: kernel process pid=%d created (pml4=0x%x)\n", (uint64_t)kproc->pid, kproc->pml4_phys);
 }
 
@@ -46,14 +49,17 @@ struct process *process_create(const char *name, void (*entry)(void *), void *ar
     proc->name[i] = 0;
 
     proc->state = 0;
-    proc->pml4_phys = KERNEL_PML4_PHYS;    /* shared for now */
+    proc->pml4_phys = vmm_create_address_space();
+    if (!proc->pml4_phys) {
+        kfree(proc);
+        return 0;
+    }
     proc->threads = 0;
-    proc->parent = current_process;
+    proc->parent = process_current();
     proc->next = process_list;
     process_list = proc;
     proc->total_ticks = 0;
 
-    /* Create the initial thread for this process */
     struct thread *t = thread_create(name, entry, arg);
     if (!t) {
         kfree(proc);
@@ -69,6 +75,8 @@ struct process *process_create(const char *name, void (*entry)(void *), void *ar
 }
 
 struct process *process_current(void) {
+    struct thread *thread = thread_current();
+    if (thread && thread->process) return thread->process;
     return current_process;
 }
 

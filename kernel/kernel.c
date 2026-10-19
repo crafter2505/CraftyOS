@@ -34,8 +34,10 @@ void _start(void) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
-    kprintf("craftyOS v0.13.3\n");
+    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    kprintf("craftyOS v0.13.5\n");
     kprintf("=======================\n\n");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
 
     print_ok("VGA driver initialized");
     print_ok("kprintf working");

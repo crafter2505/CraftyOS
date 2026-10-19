@@ -6,9 +6,11 @@
 #include "fault.h"
 #include "sched.h"
 
-void isr_handler(uint64_t int_no, uint64_t err_code, struct registers *regs)
-{
+void isr_handler(uint64_t int_no, uint64_t err_code, struct registers *regs) {
     if (int_no < 32) {
+        if ((regs->cs & 3) == 3) {
+            user_fault_handler(int_no, err_code, regs);
+        }
         fault_report(int_no, err_code, regs);
     } else if (int_no < 48) {
         uint64_t irq = int_no - 32;

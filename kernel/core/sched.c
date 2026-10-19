@@ -1,9 +1,11 @@
 #include "sched.h"
 #include "thread.h"
+#include "process.h"
 #include "kmalloc.h"
 #include "kprintf.h"
 #include "timer.h"
 #include "percpu.h"
+#include "vmm.h"
 
 static struct thread *idle_thread = 0;
 
@@ -14,6 +16,7 @@ void sched_init(void) {
         return;
     }
 
+    idle_thread->process = process_current();
     sched_add(idle_thread);
     kprintf(" SCHED: initialized (idle thread=%d)\n", (uint64_t)idle_thread->id);
 }
@@ -104,6 +107,10 @@ void schedule(void) {
                                 next->syscall_stack_size
                           : 0x90000;
     percpu_set_kernel_stack(kernel_stack);
+
+    if (next->process) {
+        vmm_switch_address_space(next->process->pml4_phys);
+    }
 
     set_current_thread(next);
     switch_to(&cur->ctx, &next->ctx);

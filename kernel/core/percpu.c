@@ -73,8 +73,8 @@ void percpu_init(void) {
 
     boot_cpu.kernel_stack = 0x90000;
     uint64_t gs_base = (uint64_t)&boot_cpu;
-    wrmsr(IA32_KERNEL_GS_BASE, gs_base);
-    wrmsr(IA32_GS_BASE, 0);
+    wrmsr(IA32_GS_BASE, gs_base);
+    wrmsr(IA32_KERNEL_GS_BASE, 0);
 
     kprintf("  PERCPU: boot CPU struct at 0x%x\n", gs_base);
 }

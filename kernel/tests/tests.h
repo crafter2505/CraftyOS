@@ -16,6 +16,8 @@ void test_vmm(void);
 void test_syscall(void);
 void test_userspace_mem(void);
 void test_ring3(void);
+void test_user_fault(void);
+void test_isolation(void);
 
 void run_all_tests(void);
 

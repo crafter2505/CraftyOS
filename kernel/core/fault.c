@@ -1,6 +1,8 @@
 #include "fault.h"
 #include "kprintf.h"
 #include "terminal.h"
+#include "thread.h"
+#include "sched.h"
 
 uint64_t fault_read_cr2(void)
 {
@@ -102,6 +104,53 @@ void fault_report(uint64_t int_no, uint64_t err_code, struct registers *regs)
     terminal_set_color(VGA_LIGHT_RED, VGA_BLACK);
     kprintf("System halted.\n");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
+
+    for (;;) {
+        __asm__ volatile ("cli; hlt");
+    }
+}
+
+void user_fault_handler(uint64_t int_no, uint64_t err_code, struct registers *regs){
+
+    terminal_set_color(VGA_LIGHT_RED, VGA_BLACK);
+    kprintf("\n[USER FAULT] ");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+
+    const char *name = "Unknown";
+    switch (int_no) {
+    case 0:  name = "Divide Error"; break;
+    case 6:  name = "Invalid Opcode"; break;
+    case 13: name = "General Protection Fault"; break;
+    case 14: name = "Page Fault"; break;
+    }
+    kprintf("%s (%d) from user mode\n", name, (int)int_no);
+
+    kprintf("  RIP:    0x%x\n", regs->rip);
+    kprintf("  RSP:    0x%x\n", regs->rsp);
+    kprintf("  CS:     0x%x\n", regs->cs);
+    kprintf("  Error:  0x%x\n", err_code);
+
+    if (int_no == 14) {
+        uint64_t cr2;
+        __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+        kprintf("  CR2:    0x%x  (faulting address)\n", cr2);
+
+        kprintf("  Details: %s, %s, %s\n",
+            (err_code & 0x1) ? "protection" : "not-present",
+            (err_code & 0x2) ? "write" : "read",
+            (err_code & 0x4) ? "user" : "supervisor");
+    }
+
+    struct thread *t = thread_current();
+    if (t) {
+        kprintf("  Terminating thread '%s' (id=%d)\n",
+            t->name, (uint64_t)t->id);
+        t->state = THREAD_TERMINATED;
+        sched_unlink_current();
+    }
+
+    kprintf("  Kernel continues.\n");
+    schedule();
 
     for (;;) {
         __asm__ volatile ("cli; hlt");

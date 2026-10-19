@@ -24,7 +24,13 @@ KERNEL_ELF := build/kernel.elf
 
 KERNEL_SECTOR := 40
 
+.DEFAULT_GOAL := parallel-all
+
 all: $(IMG)
+
+.PHONY: parallel-all
+parallel-all:
+	+$(MAKE) $(if $(filter -j% --jobs%,$(MAKEFLAGS)),,-j$(shell nproc)) all
 
 build:
 	mkdir -p build
@@ -60,7 +66,7 @@ runlog: $(IMG)
 
 remake:
 	$(MAKE) clean
-	$(MAKE) all
+	$(MAKE) parallel-all
 
 clean:
 	rm -rf build $(IMG) $(LOG) $(SERIAL_LOG)

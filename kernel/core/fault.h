@@ -7,6 +7,10 @@
 void fault_report(uint64_t int_no, uint64_t err_code, struct registers *regs)
     __attribute__((noreturn));
 
+void user_fault_handler(uint64_t int_no, uint64_t err_code,
+                        struct registers *regs)
+    __attribute__((noreturn));
+  
 void fault_print_page_error(uint64_t err);
 
 uint64_t fault_read_cr2(void);

@@ -24,12 +24,13 @@ int vmm_is_user_accessible(uint64_t virt);
 int vmm_is_user_range(uint64_t ptr, uint64_t len);
 
 void vmm_unmap(uint64_t virt);
-
 void vmm_invlpg(uint64_t virt);
-
 uint64_t vmm_translate(uint64_t virt);
-
 uint64_t vmm_alloc_page(uint64_t virt, uint64_t flags);
+uint64_t vmm_create_address_space(void);
+void vmm_destroy_address_space(uint64_t pml4_phys);
+void vmm_switch_address_space(uint64_t pml4_phys);
+uint64_t vmm_get_current_pml4(void);
 
 void vmm_test(void);
 
