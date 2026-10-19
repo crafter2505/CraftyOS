@@ -6,8 +6,15 @@ LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 
 IMG        := CraftyOS.img
+UEFI_DIR   := bootloader/uefi
+UEFI_EFI   := $(UEFI_DIR)/BOOTX64.EFI
+UEFI_IMG   := crafty-uefi.img
 LOG        := qemu.log
 SERIAL_LOG := serial.log
+OVMF_DIR   := /usr/share/OVMF
+OVMF_CODE  ?= $(OVMF_DIR)/OVMF_CODE_4M.fd
+OVMF_VARS  ?= $(OVMF_DIR)/OVMF_VARS_4M.fd
+OVMF_VARS_COPY := build/OVMF_VARS_4M.fd
 STAGE1     := bootloader/stage1.asm
 STAGE2     := bootloader/stage2.asm
 
@@ -26,7 +33,7 @@ KERNEL_SECTOR := 40
 
 .DEFAULT_GOAL := parallel-all
 
-all: $(IMG)
+all: $(IMG) $(UEFI_IMG)
 
 .PHONY: parallel-all
 parallel-all:
@@ -58,8 +65,37 @@ $(IMG): $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_ELF)
 	dd if=$(STAGE2_BIN) of=$@ bs=512 seek=1 conv=notrunc 2>/dev/null
 	dd if=$(KERNEL_ELF) of=$@ bs=512 seek=$(KERNEL_SECTOR) conv=notrunc 2>/dev/null
 
+$(UEFI_EFI): $(UEFI_DIR)/main.c $(UEFI_DIR)/efi.h $(UEFI_DIR)/Makefile
+	$(MAKE) -C $(UEFI_DIR)
+
+$(UEFI_IMG): $(UEFI_EFI) $(KERNEL_ELF)
+	dd if=/dev/zero of=$@ bs=1M count=64
+	mformat -i $@ -F ::
+	mmd -i $@ ::/EFI
+	mmd -i $@ ::/EFI/BOOT
+	mcopy -i $@ $(UEFI_EFI) ::/EFI/BOOT/BOOTX64.EFI
+	mcopy -i $@ $(KERNEL_ELF) ::/EFI/BOOT/kernel.elf
+
+$(OVMF_VARS_COPY): $(OVMF_VARS) | build
+	cp $< $@
+
+.PHONY: uefi verify-uefi run-uefi
+uefi: $(UEFI_IMG)
+
+verify-uefi: $(UEFI_IMG)
+	mdir -i $(UEFI_IMG) ::/EFI/BOOT
+
 run: $(IMG)
 	qemu-system-x86_64 -drive format=raw,file=$(IMG) -serial file:$(SERIAL_LOG)
+
+run-uefi: $(UEFI_IMG) $(OVMF_VARS_COPY)
+	qemu-system-x86_64 \
+		-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
+		-drive if=pflash,format=raw,file=$(OVMF_VARS_COPY) \
+		-drive format=raw,file=$(UEFI_IMG) \
+		-serial file:$(SERIAL_LOG)
+	@echo "--- $(SERIAL_LOG) ---"
+	@tail -40 $(SERIAL_LOG)
 
 runlog: $(IMG)
 	qemu-system-x86_64 -drive format=raw,file=$(IMG) -serial file:$(SERIAL_LOG) -d int,cpu_reset -D $(LOG)
@@ -70,5 +106,6 @@ remake:
 
 clean:
 	rm -rf build $(IMG) $(LOG) $(SERIAL_LOG)
+	$(MAKE) -C $(UEFI_DIR) clean
 
 .PHONY: all build run runlog remake clean

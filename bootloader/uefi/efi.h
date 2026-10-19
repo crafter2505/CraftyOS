@@ -16,6 +16,9 @@ typedef void *EFI_EVENT;
 #define EFI_INVALID_PARAMETER 2
 #define EFI_ERROR_BIT 0x8000000000000000ULL
 #define EFI_ERROR(status) (((EFI_STATUS)(status) & EFI_ERROR_BIT) != 0)
+#define EFI_LOADED_IMAGE_PROTOCOL_GUID \
+    { 0x5B1B31A1, 0x9562, 0x11d2, \
+      { 0x8e, 0x3f, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b } }
 
 typedef struct {
     uint32_t Data1;
@@ -189,6 +192,77 @@ typedef struct {
     void *ConfigurationTable;
 } EFI_SYSTEM_TABLE;
 
+typedef struct {
+    uint32_t Revision;
+    EFI_HANDLE ParentHandle;
+    void *SystemTable;
+    EFI_HANDLE DeviceHandle;
+    void *FilePath;
+    void *Reserved;
+    uint32_t LoadOptionsSize;
+    void *LoadOptions;
+    void *ImageBase;
+    uint64_t ImageSize;
+    uint32_t ImageCodeType;
+    uint32_t ImageDataType;
+    void *Unload;
+} EFI_LOADED_IMAGE_PROTOCOL;
+
+#define EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID \
+    { 0x964E5B22, 0x6459, 0x11d2, \
+      { 0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b } }
+
+typedef struct EFI_FILE_PROTOCOL EFI_FILE_PROTOCOL;
+typedef struct EFI_SIMPLE_FILE_SYSTEM_PROTOCOL EFI_SIMPLE_FILE_SYSTEM_PROTOCOL;
+
+struct EFI_SIMPLE_FILE_SYSTEM_PROTOCOL {
+    uint64_t Revision;
+    EFI_STATUS (EFIAPI *OpenVolume)(EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *This,
+                                    EFI_FILE_PROTOCOL **Root);
+};
+
+#define EFI_FILE_MODE_READ 0x0000000000000001ULL
+
+typedef struct {
+    uint64_t Size;
+    uint64_t FileSize;
+    uint64_t PhysicalSize;
+    uint64_t CreateTime[2];
+    uint64_t LastAccessTime[2];
+    uint64_t ModificationTime[2];
+    uint64_t Attribute;
+    CHAR16 FileName[1];
+} EFI_FILE_INFO;
+
+#define EFI_FILE_INFO_GUID \
+    { 0x09576E92, 0x6D3F, 0x11d2, \
+      { 0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b } }
+
+struct EFI_FILE_PROTOCOL {
+    uint64_t Revision;
+    EFI_STATUS (EFIAPI *Open)(EFI_FILE_PROTOCOL *This,
+                              EFI_FILE_PROTOCOL **NewHandle,
+                              CHAR16 *FileName, uint64_t OpenMode,
+                              uint64_t Attributes);
+    EFI_STATUS (EFIAPI *Close)(EFI_FILE_PROTOCOL *This);
+    EFI_STATUS (EFIAPI *Delete)(EFI_FILE_PROTOCOL *This);
+    EFI_STATUS (EFIAPI *Read)(EFI_FILE_PROTOCOL *This, UINTN *BufferSize,
+                              void *Buffer);
+    EFI_STATUS (EFIAPI *Write)(EFI_FILE_PROTOCOL *This, UINTN *BufferSize,
+                               void *Buffer);
+    EFI_STATUS (EFIAPI *GetPosition)(EFI_FILE_PROTOCOL *This,
+                                     uint64_t *Position);
+    EFI_STATUS (EFIAPI *SetPosition)(EFI_FILE_PROTOCOL *This,
+                                     uint64_t Position);
+    EFI_STATUS (EFIAPI *GetInfo)(EFI_FILE_PROTOCOL *This,
+                                 EFI_GUID *InformationType,
+                                 UINTN *BufferSize, void *Buffer);
+    EFI_STATUS (EFIAPI *SetInfo)(EFI_FILE_PROTOCOL *This,
+                                 EFI_GUID *InformationType,
+                                 UINTN BufferSize, void *Buffer);
+    EFI_STATUS (EFIAPI *Flush)(EFI_FILE_PROTOCOL *This);
+};
+
 _Static_assert(sizeof(EFI_TABLE_HEADER) == 24, "UEFI table header size mismatch");
 _Static_assert(offsetof(EFI_BOOT_SERVICES, SetWatchdogTimer) == 0x100,
                "SetWatchdogTimer offset mismatch");
@@ -196,5 +270,9 @@ _Static_assert(sizeof(EFI_BOOT_SERVICES) == 0x178,
                "BootServices table size mismatch");
 _Static_assert(offsetof(EFI_SYSTEM_TABLE, BootServices) == 0x60,
                "SystemTable BootServices offset mismatch");
+_Static_assert(offsetof(EFI_LOADED_IMAGE_PROTOCOL, DeviceHandle) == 24,
+               "Loaded Image DeviceHandle offset mismatch");
+_Static_assert(offsetof(EFI_FILE_PROTOCOL, GetInfo) == 64,
+               "File Protocol GetInfo offset mismatch");
 
 #endif
