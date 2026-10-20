@@ -62,8 +62,7 @@ static int64_t sys_write(int fd, uint64_t buf, uint64_t len) {
 void syscall_handler(uint64_t sysno, struct registers *regs) {
     switch (sysno) {
     case SYS_exit:
-        thread_exit();
-        break;
+        userspace_exit_to_kernel();
     case SYS_process_exit:
         process_exit((uint32_t)regs->rdi);
         break;

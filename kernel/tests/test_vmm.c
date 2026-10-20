@@ -3,7 +3,7 @@
 #include "pmm.h"
 #include "kprintf.h"
 
-void vmm_test(void) {
+void test_vmm(void) {
     kprintf("\nVMM Test:\n");
 
     uint64_t test_virt = 0xDEADB000ULL;
