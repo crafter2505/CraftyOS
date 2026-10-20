@@ -5,25 +5,27 @@ CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone 
 LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 
-IMG        := CraftyOS.img
-UEFI_DIR   := bootloader/uefi
-UEFI_EFI   := $(UEFI_DIR)/BOOTX64.EFI
-UEFI_IMG   := crafty-uefi.img
-LOG        := qemu.log
-SERIAL_LOG := serial.log
-OVMF_DIR   := /usr/share/OVMF
-OVMF_CODE  ?= $(OVMF_DIR)/OVMF_CODE_4M.fd
-OVMF_VARS  ?= $(OVMF_DIR)/OVMF_VARS_4M.fd
-OVMF_VARS_COPY := build/OVMF_VARS_4M.fd
-STAGE1     := bootloader/stage1.asm
-STAGE2     := bootloader/stage2.asm
+IMG        			:= CraftyOS.img
+UEFI_DIR   			:= bootloader/uefi
+UEFI_EFI   			:= $(UEFI_DIR)/BOOTX64.EFI
+UEFI_IMG   			:= crafty-uefi.img
+BIOS_LOG        	:= bios.log
+BIOS_SERIAL_LOG 	:= bios-serial.log
+UEFI_LOG 			:= uefi.log
+UEFI_SERIAL_LOG 	:= uefi-serial.log
+OVMF_DIR   			:= /usr/share/OVMF
+OVMF_CODE  			?= $(OVMF_DIR)/OVMF_CODE_4M.fd
+OVMF_VARS  			?= $(OVMF_DIR)/OVMF_VARS_4M.fd
+OVMF_VARS_COPY 		:= build/OVMF_VARS_4M.fd
+STAGE1     			:= bootloader/stage1.asm
+STAGE2     			:= bootloader/stage2.asm
 
-KERNEL_SRCS := $(shell find kernel -type f -name '*.c' -print -o -type f -name '*.asm' -print)
-KERNEL_C_SRCS := $(filter %.c,$(KERNEL_SRCS))
+KERNEL_SRCS 	:= $(shell find kernel -type f -name '*.c' -print -o -type f -name '*.asm' -print)
+KERNEL_C_SRCS 	:= $(filter %.c,$(KERNEL_SRCS))
 KERNEL_ASM_SRCS := $(filter %.asm,$(KERNEL_SRCS))
-KERNEL_OBJS := $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_C_SRCS)) \
-               $(patsubst kernel/%.asm,build/kernel/%.o,$(KERNEL_ASM_SRCS))
-KERNEL_LD   := kernel/linker.ld
+KERNEL_OBJS 	:= $(patsubst kernel/%.c,build/kernel/%.o,$(KERNEL_C_SRCS)) \
+               	   $(patsubst kernel/%.asm,build/kernel/%.o,$(KERNEL_ASM_SRCS))
+KERNEL_LD   	:= kernel/linker.ld
 
 STAGE1_BIN := build/stage1.bin
 STAGE2_BIN := build/stage2.bin
@@ -58,6 +60,9 @@ build/kernel/%.o: kernel/%.asm | build
 
 build/kernel/kernel.o build/kernel/lib/memory_map.o build/kernel/mm/vmm.o: kernel/lib/boot_info.h kernel/lib/memory_map.h
 build/kernel/mm/pmm.o build/kernel/mm/buddy.o: kernel/lib/memory_map.h
+build/kernel/drivers/ahci.o: kernel/drivers/ahci.h kernel/drivers/pci.h kernel/mm/buddy.h kernel/mm/vmm.h kernel/mm/address_space.h
+build/kernel/drivers/pci.o: kernel/drivers/pci.h kernel/arch/io.h
+build/kernel/kernel.o: kernel/drivers/ahci.h
 
 $(KERNEL_ELF): $(KERNEL_OBJS) $(KERNEL_LD)
 	$(LD) $(LDFLAGS) -o $@ $(KERNEL_OBJS)
@@ -90,26 +95,45 @@ verify-uefi: $(UEFI_IMG)
 	mdir -i $(UEFI_IMG) ::/EFI/BOOT
 
 run: $(IMG)
-	qemu-system-x86_64 -drive format=raw,file=$(IMG) -serial file:$(SERIAL_LOG)
+	qemu-system-x86_64 \
+		-drive format=raw,file=$(IMG) \
+		-serial file:$(BIOS_SERIAL_LOG)
 
 run-uefi: $(UEFI_IMG) $(OVMF_VARS_COPY)
 	qemu-system-x86_64 \
 		-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 		-drive if=pflash,format=raw,file=$(OVMF_VARS_COPY) \
-		-drive format=raw,file=$(UEFI_IMG) \
-		-serial file:$(SERIAL_LOG)
-	@echo "--- $(SERIAL_LOG) ---"
-	@tail -40 $(SERIAL_LOG)
+		-drive format=raw,file=$(UEFI_IMG),if=none,id=disk0 \
+		-device ahci,id=ahci \
+		-device ide-hd,drive=disk0,bus=ahci.0 \
+		-serial file:$(UEFI_SERIAL_LOG)
+	@echo "--- $(UEFI_SERIAL_LOG) ---"
+	@tail -40 $(UEFI_SERIAL_LOG)
 
 runlog: $(IMG)
-	qemu-system-x86_64 -drive format=raw,file=$(IMG) -serial file:$(SERIAL_LOG) -d int,cpu_reset -D $(LOG)
+	qemu-system-x86_64 \
+		-drive format=raw,file=$(IMG) \
+		-serial file:$(BIOS_SERIAL_LOG) \
+		-d int,cpu_reset -D $(BIOS_LOG)
+
+runlog-uefi: $(UEFI_IMG) $(OVMF_VARS_COPY)
+	qemu-system-x86_64 \
+		-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
+		-drive if=pflash,format=raw,file=$(OVMF_VARS_COPY) \
+		-drive format=raw,file=$(UEFI_IMG),if=none,id=disk0 \
+		-device ahci,id=ahci \
+		-device ide-hd,drive=disk0,bus=ahci.0 \
+		-serial file:$(UEFI_SERIAL_LOG) \
+		-d int,cpu_reset -D $(UEFI_LOG)
+	@echo "--- $(UEFI_SERIAL_LOG) ---"
+	@tail -40 $(UEFI_SERIAL_LOG)
 
 remake:
 	$(MAKE) clean
 	$(MAKE) parallel-all
 
 clean:
-	rm -rf build $(IMG) $(LOG) $(SERIAL_LOG)
+	rm -rf build $(IMG) $(BIOS_LOG) $(BIOS_SERIAL_LOG) $(UEFI_LOG) $(UEFI_SERIAL_LOG)
 	$(MAKE) -C $(UEFI_DIR) clean
 
-.PHONY: all build run runlog remake clean
+.PHONY: all build run runlog run-uefi runlog-uefi remake clean

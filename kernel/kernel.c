@@ -5,6 +5,7 @@
 #include "timer.h"
 #include "keyboard.h"
 #include "line.h"
+#include "ahci.h"
 #include "memory_map.h"
 #include "serial.h"
 
@@ -80,6 +81,12 @@ void _start(struct boot_info *boot_info) {
 
     vmm_init();
     print_ok("Virtual memory manager ready");
+
+    if (ahci_init() == 0) {
+        print_ok("PCI/AHCI storage initialized");
+    } else {
+        kprintf("PCI/AHCI storage unavailable\n");
+    }
 
     thread_init_subsystem();
     process_init_subsystem();

@@ -10,6 +10,16 @@ static inline unsigned char inb(unsigned short port) {
     return result;
 }
 
+static inline unsigned short inw(unsigned short port) {
+    unsigned short result;
+    __asm__ volatile ("inw %1, %0" : "=a"(result) : "Nd"(port));
+    return result;
+}
+
+static inline void outw(unsigned short port, unsigned short value) {
+    __asm__ volatile ("outw %0, %1" : : "a"(value), "Nd"(port));
+}
+
 static inline void wrmsr(unsigned int msr, unsigned long long value) {
     unsigned int lo = (unsigned int)(value & 0xFFFFFFFF);
     unsigned int hi = (unsigned int)(value >> 32);
@@ -28,6 +38,12 @@ static inline void io_wait(void) {
 
 static inline void outl(unsigned short port, unsigned int value) {
     __asm__ volatile ("outl %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static inline unsigned int inl(unsigned short port) {
+    unsigned int result;
+    __asm__ volatile ("inl %1, %0" : "=a"(result) : "Nd"(port));
+    return result;
 }
 
 #endif

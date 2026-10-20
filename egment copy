@@ -1,0 +1,51 @@
+[33mebfd12e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;33mtag: [m[1;33mv0.14.0[m[33m)[m 14.5: UEFI boot complete, output via serial
+[33me439c4e[m 14.2: UEFI memory map and file system
+[33ma67c343[m 14.1: UEFI toolchain and hello world
+[33m442ed2f[m[33m ([m[1;33mtag: [m[1;33mv0.13.0[m[33m)[m 13.6: process lifecycle, exit status, wait
+[33mf9cf62b[m 13.5: per-process address spaces with isolation
+[33ma0979f9[m add serial output for debug logging
+[33m1297717[m 13.3: real sys_write with user pointer validation
+[33mbe08a8b[m 13.2b: ring 3 works
+[33meb30b3d[m Milestone 13 Session 2a: user-accessible page mappings
+[33m9eab39c[m 0.13.1: (percpu)initialize per-CPU state and GS base
+[33m70885c0[m Milestone 13 Session 1a: user GDT segments, syscall MSR setup
+[33m51d8159[m[33m ([m[1;32mhigher-half[m[33m)[m v0.12.0 release polish: banner, Makefile, test wiring
+[33mf2bc7f9[m[33m ([m[1;33mtag: [m[1;33mv0.12.0[m[33m)[m Verify build after folder reorganization
+[33m04230aa[m Folder reorganization: mm/core/drivers/lib/arch/tests
+[33mf78ec5f[m Move architecture sources into kernel/arch
+[33m1d2e2b5[m Move scheduler and process code into kernel/core
+[33m3134b43[m Move hardware drivers into kernel/drivers
+[33m808c1c7[m Move shared utilities into kernel/lib
+[33m5725368[m Refactor memory management sources into kernel/mm
+[33m419f43e[m Milestone 12 Session 6: stress, fairness, sleep accuracy, wake order tests
+[33mcaaade7[m Organized Files
+[33mbbc8ac1[m Milestone 12 Session 5: sched_block, sched_wake, sched_sleep
+[33m7934ce4[m Milestone 12 Session 4: deferred reaping, idle thread frees dead threads
+[33m61f5155[m Milestone 12 Session 3: scheduler with timer preemption
+[33m62766a6[m Milestone 12 Session 2: verified context switch with round-trip test
+[33m72a71ef[m Milestone 12 Session 1: thread and process data structures
+[33m6353755[m[33m ([m[1;33mtag: [m[1;33mv0.11.0[m[33m)[m Milestone 11 Session 6: page metadata, header-free allocator
+[33ma666347[m Milestone 11 Session 5: kmalloc, kfree, kzalloc
+[33m67f0a3e[m stage2: read ELF program headers to compute dynamic load size
+[33mcff8f67[m Milestone 11.3: kmem_cache_create and slab_dump_stats
+[33m62c6090[m Milestone 11 Session 2: alloc_pages and free_pages with buddy coalescing
+[33mdf1ac54[m Milestone 11 Session 1: buddy allocator init and page array
+[33ma3c3bf7[m[33m ([m[1;33mtag: [m[1;33mv0.10.0[m[33m)[m Milestone 10 Session 3: VMM tests and cleanup
+[33md97cd97[m Milestone 10 Session 2: vmm_map, vmm_unmap, vmm_translate
+[33mc6e6344[m Milestone 10 Session 1: VMM skeleton and helpers
+[33m64f3591[m[33m ([m[1;33mtag: [m[1;33mv0.9.0[m[33m)[m v0.9.3: scrollback, 64-bit kprintf, dedicated fault handler, ELF staging buffer fix
+[33m3c0056e[m Milestone 9 Session 2: runtime page tables, 2MB aligned kernel, higher-half mapping working
+[33m81c130e[m Milestone 9 Session 1: higher-half address space design and linker script
+[33mf52a991[m Add runlog target for flag-controlled QEMU logging
+[33mbd5b289[m[33m ([m[1;33mtag: [m[1;33mv0.8.0[m[33m)[m Milestone 8 Session 3: alloc_page and free_page (hardware-ready)
+[33mad63ae9[m Milestone 8 Session 2: PMM bitmap and init
+[33m5b290f7[m Milestone 8 Session 1: E820 memory detection
+[33m3155f79[m[33m ([m[1;33mtag: [m[1;33mv0.7.4[m[33m)[m Milestone 7 Session 4: line editor with backspace and Enter
+[33m55a6f79[m Milestone 7 Session 3: interrupts, IDT, timer, keyboard — OS is interactive
+[33m46be926[m Milestone 7 Session 2: IDT and interrupt dispatcher
+[33mc1908c9[m Milestone 7 Session 1: port I/O helpers, PIC remap
+[33m7bd6206[m[33m ([m[1;33mtag: [m[1;33mv0.6.0[m[33m)[m Milestone 6: VGA driver, terminal layer, kprintf
+[33mcc102cb[m[33m ([m[1;33mtag: [m[1;33mv0.5.0[m[33m)[m Milestone 5: load and run C kernel from disk
+[33md623bce[m[33m ([m[1;33mtag: [m[1;33mv0.4.0[m[33m)[m Milestone 4: 64-bit long mode working
+[33ma068a62[m[33m ([m[1;33mtag: [m[1;33mv0.3.0[m[33m)[m Milestone 3: 32-bit protected mode working
+[33m75599bf[m[33m ([m[1;33mtag: [m[1;33mv0.2.0[m[33m)[m Milestone 2: two-stage bootloader working

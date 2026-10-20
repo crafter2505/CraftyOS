@@ -48,7 +48,9 @@ run: verify
 	qemu-system-x86_64 \
 		-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 		-drive if=pflash,format=raw,file=$(OVMF_VARS_COPY) \
-		-drive format=raw,file=$(IMAGE) \
+		-drive format=raw,file=$(IMAGE),if=none,id=disk0 \
+		-device ahci,id=ahci \
+		-device ide-hd,drive=disk0,bus=ahci.0 \
 		-serial stdio
 
 clean:
