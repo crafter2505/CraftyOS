@@ -11,7 +11,7 @@
 static pid_t next_pid = 1;
 static struct process *process_list = 0;
 static struct process *current_process = 0;
-#define KERNEL_PML4_PHYS 0x10000
+static uint64_t kernel_pml4_phys;
 
 void process_init_subsystem(void) {
     struct process *kproc = (struct process *)kmalloc(sizeof(struct process));
@@ -27,7 +27,8 @@ void process_init_subsystem(void) {
     while (pn[i] && i < PROCESS_NAME_LEN - 1) { kproc->name[i] = pn[i]; i++; }
     kproc->name[i] = 0;
     kproc->state = 0;
-    kproc->pml4_phys = KERNEL_PML4_PHYS;
+    kernel_pml4_phys = vmm_get_current_pml4();
+    kproc->pml4_phys = kernel_pml4_phys;
     kproc->threads = 0;
     kproc->parent = 0;
     kproc->next = process_list;
@@ -133,10 +134,10 @@ int process_wait(pid_t pid, uint32_t *status_out) {
 }
 
 void process_free_address_space(uint64_t pml4_phys) {
-    if (!pml4_phys || pml4_phys == 0x10000) return;
+    if (!pml4_phys || pml4_phys == kernel_pml4_phys) return;
 
     uint64_t *pml4 = (uint64_t *)(DIRECT_MAP_BASE + pml4_phys);
-    uint64_t *kernel_pml4 = (uint64_t *)(DIRECT_MAP_BASE + KERNEL_PML4_PHYS);
+    uint64_t *kernel_pml4 = (uint64_t *)(DIRECT_MAP_BASE + kernel_pml4_phys);
 
     for (int i = 0; i < 256; i++) {
         uint64_t pml4_entry = pml4[i];
@@ -144,10 +145,16 @@ void process_free_address_space(uint64_t pml4_phys) {
         if (pml4_entry == kernel_pml4[i]) continue;
 
         uint64_t *pdpt = (uint64_t *)(DIRECT_MAP_BASE + (pml4_entry & 0x000FFFFFFFFFF000ULL));
+        uint64_t *shared_pdpt = 0;
+        if (kernel_pml4[i] & VMM_PRESENT) {
+            shared_pdpt = (uint64_t *)(DIRECT_MAP_BASE +
+                           (kernel_pml4[i] & 0x000FFFFFFFFFF000ULL));
+        }
 
         for (int j = 0; j < 512; j++) {
             uint64_t pdpt_entry = pdpt[j];
             if (!(pdpt_entry & VMM_PRESENT)) continue;
+            if (shared_pdpt && pdpt_entry == shared_pdpt[j]) continue;
             if (pdpt_entry & VMM_HUGE) continue;
 
             uint64_t *pd = (uint64_t *)(DIRECT_MAP_BASE +

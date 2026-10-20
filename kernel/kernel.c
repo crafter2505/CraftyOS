@@ -8,6 +8,8 @@
 #include "memory_map.h"
 #include "serial.h"
 
+#include "boot_info.h"
+
 #include "pmm.h"
 #include "buddy.h"
 #include "kmalloc.h"
@@ -28,14 +30,28 @@ static void print_ok(const char *msg) {
     kprintf("%s\n", msg);
 }
 
-void _start(void) {
+void _start(struct boot_info *boot_info) {
+    __asm__ volatile ("cli" : : : "memory");
+    percpu_gdt_init();
     serial_init();
+    if (boot_info && memory_map_set_boot_info(boot_info) != 0) {
+        serial_puts("Invalid UEFI boot information\n");
+        for (;;) __asm__ volatile ("cli; hlt");
+    }
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("craftyOS v0.13.0\n");
+    kprintf("craftyOS v0.14.0");
+    terminal_set_color(VGA_WHITE, VGA_BLACK);
+    if (boot_info) {
+        kprintf(" (UEFI boot)\n");
+        kprintf("UEFI memmap: %d entries at phys 0x%x\n",
+                (uint64_t)boot_info->memmap_count, boot_info->memmap_phys);
+    }else {
+        kprintf(" (BIOS boot)\n");
+    }
     kprintf("=======================\n\n");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
 

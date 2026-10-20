@@ -37,7 +37,7 @@ static void pmm_mark_used(uint64_t base, uint64_t size) {
 }
 
 static void pmm_mark_free(uint64_t base, uint64_t size) {
-    uint64_t start = (base / PAGE_SIZE - 1) / PAGE_SIZE;
+    uint64_t start = (base + PAGE_SIZE - 1) / PAGE_SIZE;
     uint64_t end = (base + size) / PAGE_SIZE;
 
     for (uint64_t p = start; p < end && p < PMM_MAX_PAGES; p++) {

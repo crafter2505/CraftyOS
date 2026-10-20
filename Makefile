@@ -56,6 +56,9 @@ build/kernel/%.o: kernel/%.asm | build
 	mkdir -p $(dir $@)
 	$(ASM) -f elf64 $< -o $@
 
+build/kernel/kernel.o build/kernel/lib/memory_map.o build/kernel/mm/vmm.o: kernel/lib/boot_info.h kernel/lib/memory_map.h
+build/kernel/mm/pmm.o build/kernel/mm/buddy.o: kernel/lib/memory_map.h
+
 $(KERNEL_ELF): $(KERNEL_OBJS) $(KERNEL_LD)
 	$(LD) $(LDFLAGS) -o $@ $(KERNEL_OBJS)
 
@@ -65,7 +68,8 @@ $(IMG): $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_ELF)
 	dd if=$(STAGE2_BIN) of=$@ bs=512 seek=1 conv=notrunc 2>/dev/null
 	dd if=$(KERNEL_ELF) of=$@ bs=512 seek=$(KERNEL_SECTOR) conv=notrunc 2>/dev/null
 
-$(UEFI_EFI): $(UEFI_DIR)/main.c $(UEFI_DIR)/efi.h $(UEFI_DIR)/Makefile
+$(UEFI_EFI): $(UEFI_DIR)/main.c $(UEFI_DIR)/efi.h $(UEFI_DIR)/elf.h \
+             kernel/lib/boot_info.h $(UEFI_DIR)/Makefile
 	$(MAKE) -C $(UEFI_DIR)
 
 $(UEFI_IMG): $(UEFI_EFI) $(KERNEL_ELF)

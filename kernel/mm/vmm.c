@@ -2,6 +2,7 @@
 #include "address_space.h"
 #include "pmm.h"
 #include "kprintf.h"
+#include "memory_map.h"
 
 #define PML4_INDEX(v)   (((v) >> 39) & 0x1FF)
 #define PDPT_INDEX(v)   (((v) >> 30) & 0x1FF)
@@ -9,6 +10,7 @@
 #define PT_INDEX(v)     (((v) >> 12) & 0x1FF)
 
 static uint64_t current_pml4_phys = 0x10000;
+static uint64_t kernel_pml4_phys = 0x10000;
 
 static inline uint64_t *phys_to_ptr(uint64_t phys) {
     return (uint64_t *)(DIRECT_MAP_BASE + phys);
@@ -81,8 +83,11 @@ static uint64_t *pt_walk(uint64_t virt, int allocate, int user) {
 }
 
 void vmm_init(void) {
-    current_pml4_phys = 0x10000;
-    kprintf("  VMM: PML4 at virt 0x%x (phys 0x10000)\n",
+    struct boot_info *boot_info = memory_map_get_boot_info();
+    current_pml4_phys = boot_info ? boot_info->pml4_phys : 0x10000;
+    kernel_pml4_phys = current_pml4_phys;
+    kprintf("  VMM: PML4 phys 0x%x virt 0x%x\n",
+            current_pml4_phys,
             (uint64_t)get_current_pml4_ptr());
 }
 
@@ -204,16 +209,29 @@ uint64_t vmm_create_address_space(void) {
     uint64_t new_pml4_phys = (uint64_t)pmm_alloc_page();
     if (!new_pml4_phys) return 0;
     uint64_t *new_pml4 = (uint64_t *)(DIRECT_MAP_BASE + new_pml4_phys);
-    uint64_t *kernel_pml4 = (uint64_t *)(DIRECT_MAP_BASE + 0x10000);
+    uint64_t *kernel_pml4 = phys_to_ptr(kernel_pml4_phys);
     for (int i = 0; i < 512; i++) {
         new_pml4[i] = kernel_pml4[i];
+    }
+
+    uint64_t kernel_entry = kernel_pml4[0];
+    if (kernel_entry & VMM_PRESENT) {
+        uint64_t new_pdpt_phys = (uint64_t)pmm_alloc_page();
+        if (!new_pdpt_phys) {
+            pmm_free_page((void *)new_pml4_phys);
+            return 0;
+        }
+        uint64_t *new_pdpt = phys_to_ptr(new_pdpt_phys);
+        uint64_t *kernel_pdpt = phys_to_ptr(kernel_entry & 0x000FFFFFFFFFF000ULL);
+        for (int i = 0; i < 512; i++) new_pdpt[i] = kernel_pdpt[i];
+        new_pml4[0] = new_pdpt_phys | (kernel_entry & 0xFFF);
     }
     return new_pml4_phys;
 }
 
 void vmm_destroy_address_space(uint64_t pml4_phys) {
     if (pml4_phys == 0) return;
-    if (pml4_phys == 0x10000) return;
+    if (pml4_phys == kernel_pml4_phys) return;
 
     uint64_t *pml4_ptr = (uint64_t *)(DIRECT_MAP_BASE + pml4_phys);
 

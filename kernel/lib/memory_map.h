@@ -2,17 +2,11 @@
 #define MEMORY_MAP_H
 
 #include "types.h"
-
-struct e820_entry {
-    uint64_t base;
-    uint64_t length;
-    uint32_t type;
-    uint32_t acpi;
-}__attribute__((packed));
+#include "boot_info.h"
 
 #define MEMORY_MAP_ADDR     0x500
-#define MEMORY_MAP_COUNT    (*(volatile uint32_t *)0x500)
-#define MEMORY_MAP_ENTRIES  ((struct e820_entry *)0x508)
+#define MEMORY_MAP_COUNT    (memory_map_count())
+#define MEMORY_MAP_ENTRIES  (memory_map_entries())
 
 #define E820_TYPE_USABLE    1
 #define E820_TYPE_RESERVED  2
@@ -21,5 +15,9 @@ struct e820_entry {
 #define E820_TYPE_UNUSABLE  5
 
 void memory_map_dump(void);
+uint32_t memory_map_count(void);
+struct e820_entry *memory_map_entries(void);
+int memory_map_set_boot_info(struct boot_info *boot_info);
+struct boot_info *memory_map_get_boot_info(void);
 
 #endif

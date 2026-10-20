@@ -353,6 +353,7 @@ long_mode_entry:
     jmp .segment_loop
 
 .jump_kernel:
+    xor edi, edi
     jmp r15
 
 .hang:

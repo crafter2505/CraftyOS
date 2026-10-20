@@ -30,8 +30,40 @@ struct gdtr {
     uint64_t base;
 } __attribute__((packed));
 
+static uint64_t kernel_gdt[8] __attribute__((aligned(16))) = {
+    0,
+    0x00CF9A000000FFFFULL,
+    0x00AF9A000000FFFFULL,
+    0x00CF92000000FFFFULL,
+    0x00CFF2000000FFFFULL,
+    0x00AFFA000000FFFFULL,
+    0,
+    0
+};
+static struct gdtr kernel_gdtr;
 static struct tss64 boot_tss;
 static uint8_t ring3_kernel_stack[16384] __attribute__((aligned(16)));
+
+void percpu_gdt_init(void) {
+    kernel_gdtr.limit = sizeof(kernel_gdt) - 1;
+    kernel_gdtr.base = (uint64_t)kernel_gdt;
+    __asm__ volatile (
+        "lgdt %0\n\t"
+        "mov $0x18, %%ax\n\t"
+        "mov %%ax, %%ds\n\t"
+        "mov %%ax, %%es\n\t"
+        "mov %%ax, %%fs\n\t"
+        "mov %%ax, %%gs\n\t"
+        "mov %%ax, %%ss\n\t"
+        "pushq $0x10\n\t"
+        "leaq 1f(%%rip), %%rax\n\t"
+        "pushq %%rax\n\t"
+        "lretq\n\t"
+        "1:\n\t"
+        :
+        : "m"(kernel_gdtr)
+        : "rax", "memory");
+}
 
 struct percpu *percpu_get(void) {
     return &boot_cpu;

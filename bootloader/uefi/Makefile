@@ -26,7 +26,7 @@ OVMF_VARS_COPY = ../../build/OVMF_VARS_4M.fd
 
 all: BOOTX64.EFI
 
-main.obj: main.c efi.h
+main.obj: main.c efi.h elf.h ../../kernel/lib/boot_info.h
 	$(CC) $(CFLAGS) -c main.c -o $@
 
 BOOTX64.EFI: main.obj
