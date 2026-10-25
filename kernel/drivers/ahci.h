@@ -104,6 +104,7 @@ struct ahci_controller {
 
 int  ahci_init(void);
 int  ahci_read_sector(uint8_t port, uint64_t lba, void *buffer);
+int ahci_controller_exists(void);
 void ahci_dump_info(void);
 
 #endif

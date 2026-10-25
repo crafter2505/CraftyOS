@@ -12,6 +12,11 @@
 static struct ahci_controller ahci;
 static int ahci_initialized;
 
+int ahci_controller_exists(void) {
+    struct pci_device dev;
+    return pci_find_ahci(&dev) == 0 ? 1 : 0;
+}
+
 static inline uint32_t ahci_read(uint32_t reg) {
     return *(volatile uint32_t *)(ahci.abar_virt + reg);
 }

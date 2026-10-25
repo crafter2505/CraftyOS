@@ -13,6 +13,7 @@
 
 #include "vfs.h"
 #include "ramfs.h"
+#include "fat32.h"
 
 #include "pmm.h"
 #include "buddy.h"
@@ -107,14 +108,22 @@ void _start(struct boot_info *boot_info) {
     extern int ramfs_init(void);
     vfs_init();
     if (ramfs_init() == 0) {
-    print_ok("VFS initialized, ramfs mounted at /");
+        print_ok("VFS initialized, ramfs mounted at /");
+    }
+
+    if (ahci_controller_exists()) {
+        if (fat32_mount("/mnt") != 0) {
+            kprintf("  [WARN] FAT32 mount failed\n");
+        } else {
+            print_ok("FAT32 mounted at /mnt");
+        }
     }
 
     pic_clear_mask(0);
     pic_clear_mask(1);
 
     __asm__ volatile ("sti");
-    
+
     kprintf("\n");
     terminal_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
     kprintf("---Running Self-Test---");

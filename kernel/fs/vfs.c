@@ -49,23 +49,42 @@ struct inode *vfs_lookup(const char *path) {
     if (!path || !root_mount) return 0;
 
     struct inode *cur = root_mount->root;
+    const char *rest = path;
+    struct vfs_mount *m;
+    struct vfs_mount *best = 0;
+    uint64_t best_len = 0;
 
-    if (path[0] == '/' && path[1] == 0) {
-        return cur;
+    for (m = mounts; m; m = m->next) {
+        uint64_t len = 0;
+        while (m->path[len] && path[len] && m->path[len] == path[len]) len++;
+        if (m->path[len] == 0 && len > best_len &&
+            (path[len] == 0 || path[len] == '/' ||
+             (len > 0 && m->path[len - 1] == '/'))) {
+            best = m;
+            best_len = len;
+        }
     }
 
-    if (*path == '/') path++;
+    if (best && best_len > 0) {
+        cur = best->root;
+        rest = path + best_len;
+    }
+
+    /* Root path */
+    if (rest[0] == 0) return cur;
+    if (rest[0] == '/' && rest[1] == 0) return cur;
+
+    /* Skip leading slash */
+    if (*rest == '/') rest++;
 
     char name[256];
-
-    while (*path) {
+    while (*rest) {
         int i = 0;
-        while (*path && *path != '/' && i < 255) {
-            name[i++] = *path++;
+        while (*rest && *rest != '/' && i < 255) {
+            name[i++] = *rest++;
         }
         name[i] = 0;
-
-        while (*path == '/') path++;
+        while (*rest == '/') rest++;
 
         if (name[0] == 0) break;
 

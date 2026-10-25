@@ -9,7 +9,7 @@ void test_ahci(void) {
 
     struct pci_device dev;
     if (pci_find_ahci(&dev) != 0) {
-        kprintf("  SKIP: no AHCI controller (BROS boot)\n");
+        kprintf("  SKIP: no AHCI controller (BIOS boot)\n");
         return;
     }
 
