@@ -1,7 +1,7 @@
 ASM      := nasm
 ASMFLAGS := -f bin
 CC       := gcc
-CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -Ikernel -Ikernel/mm -Ikernel/core -Ikernel/drivers -Ikernel/lib -Ikernel/arch -c
+CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -Ikernel -Ikernel/mm -Ikernel/core -Ikernel/drivers -Ikernel/lib -Ikernel/arch -Ikernel/fs -c
 LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 

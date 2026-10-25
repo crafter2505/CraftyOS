@@ -22,6 +22,7 @@ void run_all_tests(void) {
     test_isolation();
     test_process_lifecycle();
     test_ahci();
+    test_vfs();
 
     terminal_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
     kprintf("\n=== all tests completed ===\n\n");

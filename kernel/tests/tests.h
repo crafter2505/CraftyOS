@@ -20,6 +20,7 @@ void test_user_fault(void);
 void test_isolation(void);
 void test_process_lifecycle(void);
 void test_ahci(void);
+void test_vfs(void);
 
 void run_all_tests(void);
 

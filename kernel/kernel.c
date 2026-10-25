@@ -11,6 +11,9 @@
 
 #include "boot_info.h"
 
+#include "vfs.h"
+#include "ramfs.h"
+
 #include "pmm.h"
 #include "buddy.h"
 #include "kmalloc.h"
@@ -44,7 +47,7 @@ void _start(struct boot_info *boot_info) {
     terminal_clear();
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("craftyOS v0.14.0");
+    kprintf("craftyOS v0.16.1");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     if (boot_info) {
         kprintf(" (UEFI boot)\n");
@@ -100,6 +103,12 @@ void _start(struct boot_info *boot_info) {
 
     line_init();
     print_ok("Line editor ready");
+
+    extern int ramfs_init(void);
+    vfs_init();
+    if (ramfs_init() == 0) {
+    print_ok("VFS initialized, ramfs mounted at /");
+    }
 
     pic_clear_mask(0);
     pic_clear_mask(1);
