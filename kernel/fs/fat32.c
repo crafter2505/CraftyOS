@@ -50,6 +50,17 @@ struct fat32_dir_entry {
     uint32_t file_size;
 } __attribute__((packed));
 
+struct fat32_lfn_entry {
+    uint8_t  seq;
+    uint16_t name1[5];
+    uint8_t  attr;
+    uint8_t  reserved;
+    uint8_t  checksum;
+    uint16_t name2[6];
+    uint16_t reserved2;
+    uint16_t name3[2];
+} __attribute__((packed));
+
 #define FAT32_ATTR_LONG_NAME  0x0F
 #define FAT32_ATTR_DIRECTORY  0x10
 #define FAT32_ATTR_ARCHIVE    0x20
@@ -70,6 +81,33 @@ struct fat32_fs {
     uint32_t fat_entries;
     uint32_t total_clusters;
 };
+
+static char lfn_char_to_ascii(uint16_t c) {
+    if (c < 0x80) return (char)c;
+    return '?';
+}
+
+static int lfn_append_chars(struct fat32_lfn_entry *e, char *out,
+                             uint32_t out_len, uint32_t base) {
+    uint16_t chars[13];
+    for (int i = 0; i < 5; i++) chars[i]    = e->name1[i];
+    for (int i = 0; i < 6; i++) chars[5+i]  = e->name2[i];
+    for (int i = 0; i < 2; i++) chars[11+i] = e->name3[i];
+
+    int wrote = 0;
+    for (int i = 0; i < 13; i++) {
+        uint32_t pos = base + i;
+        if (pos >= out_len - 1) break;
+        uint16_t c = chars[i];
+        if (c == 0x0000 || c == 0xFFFF) {
+            out[pos] = 0;
+            return wrote;
+        }
+        out[pos] = lfn_char_to_ascii(c);
+        wrote++;
+    }
+    return wrote;
+}
 
 static struct fat32_fs g_fs;
 
@@ -130,7 +168,6 @@ static struct inode *fat32_lookup(struct inode *dir, const char *name) {
     uint8_t *cluster_buf = (uint8_t *)kmalloc(g_fs.cluster_size);
     if (!cluster_buf) return 0;
 
-    /* Lowercase the request once so we can compare case-insensitively. */
     char needle[256];
     int n = 0;
     while (name[n] && n < 255) {
@@ -145,7 +182,15 @@ static struct inode *fat32_lookup(struct inode *dir, const char *name) {
     int found = 0;
     struct fat32_dir_entry found_entry;
 
+    char     lfn_buf[256];
+    uint32_t lfn_len = 0;
+    int      lfn_active = 0;
+
+    int iterations = 0;
+    const int MAX_ITER = 65536;
+
     while (cluster != 0 && cluster != 0xFFFFFFFF && !found) {
+        if (++iterations > MAX_ITER) break;
         if (read_cluster(cluster, cluster_buf) != 0) break;
 
         uint32_t n_entries = g_fs.cluster_size / 32;
@@ -153,22 +198,62 @@ static struct inode *fat32_lookup(struct inode *dir, const char *name) {
 
         for (uint32_t i = 0; i < n_entries; i++) {
             uint8_t first = entries[i].name[0];
+
             if (first == 0) { cluster = 0xFFFFFFFF; break; }
-            if (first == 0xE5) continue;
-            if (entries[i].attr == FAT32_ATTR_LONG_NAME) continue;
-            if (entries[i].attr & FAT32_ATTR_VOLUME_ID) continue;
+            if (first == 0xE5) {
+                lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
+                continue;
+            }
+
+            if (entries[i].attr == FAT32_ATTR_LONG_NAME) {
+                struct fat32_lfn_entry *le = (struct fat32_lfn_entry *)&entries[i];
+                uint8_t seq = le->seq & 0x3F;
+                if (seq == 0 || seq > 20) continue;
+
+                uint32_t base = (uint32_t)(seq - 1) * 13;
+                int wrote = lfn_append_chars(le, lfn_buf, sizeof(lfn_buf), base);
+                if (wrote > 0) {
+                    lfn_active = 1;
+                    if (base + wrote > lfn_len) lfn_len = base + wrote;
+                }
+                continue;
+            }
+
+            if (entries[i].attr & FAT32_ATTR_VOLUME_ID) {
+                lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
+                continue;
+            }
 
             char short_name[16];
             format_short_name(&entries[i], short_name, sizeof(short_name));
-            if (short_name[0] == 0) continue;
+
+            const char *effective_name;
+            if (lfn_active && lfn_len > 0) {
+                lfn_buf[lfn_len] = 0;
+                effective_name = lfn_buf;
+            } else {
+                effective_name = short_name;
+            }
+
+            char lower_name[256];
+            int k = 0;
+            while (effective_name[k] && k < 255) {
+                char c = effective_name[k];
+                if (c >= 'A' && c <= 'Z') c += 32;
+                lower_name[k] = c;
+                k++;
+            }
+            lower_name[k] = 0;
 
             int j = 0;
-            while (short_name[j] && needle[j] && short_name[j] == needle[j]) j++;
-            if (short_name[j] == 0 && needle[j] == 0) {
+            while (lower_name[j] && needle[j] && lower_name[j] == needle[j]) j++;
+            if (lower_name[j] == 0 && needle[j] == 0) {
                 found_entry = entries[i];
                 found = 1;
                 break;
             }
+
+            lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
         }
 
         if (!found) cluster = fat_next_cluster(cluster);
@@ -216,7 +301,15 @@ static int fat32_readdir(struct inode *dir, uint64_t index,
     uint64_t found = 0;
     int result = -1;
 
+    char     lfn_buf[256];
+    uint32_t lfn_len = 0;
+    int      lfn_active = 0;
+
+    int iterations = 0;
+    const int MAX_ITER = 65536;
+
     while (cluster != 0 && cluster != 0xFFFFFFFF) {
+        if (++iterations > MAX_ITER) break;
         if (read_cluster(cluster, cluster_buf) != 0) break;
 
         uint32_t n_entries = g_fs.cluster_size / 32;
@@ -224,27 +317,56 @@ static int fat32_readdir(struct inode *dir, uint64_t index,
 
         for (uint32_t i = 0; i < n_entries; i++) {
             uint8_t first = entries[i].name[0];
+
             if (first == 0) { cluster = 0xFFFFFFFF; break; }
-            if (first == 0xE5) continue;
-            if (entries[i].attr == FAT32_ATTR_LONG_NAME) continue;
-            if (entries[i].attr & FAT32_ATTR_VOLUME_ID) continue;
+            if (first == 0xE5) { lfn_active = 0; lfn_len = 0; continue; }
+
+            if (entries[i].attr == FAT32_ATTR_LONG_NAME) {
+                struct fat32_lfn_entry *le = (struct fat32_lfn_entry *)&entries[i];
+                uint8_t seq = le->seq & 0x3F;
+                if (seq == 0 || seq > 20) continue;
+                uint32_t base = (uint32_t)(seq - 1) * 13;
+                int wrote = lfn_append_chars(le, lfn_buf, sizeof(lfn_buf), base);
+                if (wrote > 0) {
+                    lfn_active = 1;
+                    if (base + wrote > lfn_len) lfn_len = base + wrote;
+                }
+                continue;
+            }
+
+            if (entries[i].attr & FAT32_ATTR_VOLUME_ID) {
+                lfn_active = 0; lfn_len = 0; continue;
+            }
 
             char short_name[16];
             format_short_name(&entries[i], short_name, sizeof(short_name));
-            if (short_name[0] == 0) continue;
+
+            const char *effective_name;
+            if (lfn_active && lfn_len > 0) {
+                lfn_buf[lfn_len] = 0;
+                effective_name = lfn_buf;
+            } else {
+                effective_name = short_name;
+            }
+
+            if (effective_name[0] == 0) {
+                lfn_active = 0; lfn_len = 0; continue;
+            }
 
             if (found == index) {
-                int j = 0;
-                while (short_name[j] && (uint64_t)j < name_len - 1) {
-                    out_name[j] = short_name[j];
-                    j++;
+                int k = 0;
+                while (effective_name[k] && (uint64_t)k < name_len - 1) {
+                    out_name[k] = effective_name[k];
+                    k++;
                 }
-                out_name[j] = 0;
-                result = j;
+                out_name[k] = 0;
+                result = k;
                 goto done;
             }
             found++;
+            lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
         }
+
         cluster = fat_next_cluster(cluster);
     }
 
@@ -262,11 +384,9 @@ static int fat32_read(struct file *f, void *buf, uint64_t count) {
     uint64_t remaining = d->size - f->pos;
     uint64_t to_read = count < remaining ? count : remaining;
 
-    /* Allocate a cluster buffer */
     uint8_t *cluster_buf = (uint8_t *)kmalloc(g_fs.cluster_size);
     if (!cluster_buf) return -1;
 
-    /* Find the cluster containing f->pos */
     uint32_t cluster = d->first_cluster;
     uint64_t skip = f->pos / g_fs.cluster_size;
     for (uint64_t i = 0; i < skip; i++) {
@@ -329,13 +449,10 @@ static struct file_operations fat32_f_op = {
     .close = 0,
 };
 
-
 int fat32_mount(const char *mount_path) {
     kprintf("  FAT32: mounting at '%s'\n", mount_path);
 
-
     g_fs.port = 0;
-
 
     uint8_t boot[512];
     if (ahci_read_sector(g_fs.port, 0, boot) != 0) {

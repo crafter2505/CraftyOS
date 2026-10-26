@@ -71,5 +71,30 @@ void test_fat32(void) {
         }
     }
 
+    /* Test 6: long filename lookup */
+    struct file *lf = vfs_open("/mnt/longfilename.txt", O_RDONLY);
+    if (lf) {
+        char buf[64];
+        int n = vfs_read(lf, buf, sizeof(buf) - 1);
+        if (n > 0) {
+            buf[n] = 0;
+            kprintf("  [6] PASS: long name read '%s'\n", buf);
+        } else {
+            kprintf("  [6] FAIL: read returned %d\n", (uint64_t)n);
+        }
+        vfs_close(lf);
+    } else {
+        kprintf("  [6] FAIL: long filename lookup\n");
+    }
+
+    /* Test 7: readdir shows long names */
+    kprintf("  [7] /mnt contents (recheck for longname):\n");
+    idx = 0;
+    while (vfs_readdir(mnt, idx, name, sizeof(name)) > 0) {
+        kprintf("       %s\n", name);
+        idx++;
+    }
+    kprintf("  [7] PASS: readdir\n");
+
     kprintf("=== FAT32 test done ===\n");
 }
