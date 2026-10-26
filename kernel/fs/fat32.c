@@ -3,6 +3,8 @@
 #include "kmalloc.h"
 #include "kprintf.h"
 #include "ahci.h"
+#include "buddy.h"
+#include "address_space.h"
 
 struct fat32_bpb {
     uint8_t  jmp[3];
@@ -133,6 +135,30 @@ static uint32_t fat_next_cluster(uint32_t cluster) {
     return val;
 }
 
+static void *alloc_cluster_buf(void) {
+    uint32_t sz = g_fs.cluster_size;
+    if (sz <= 2048) return kmalloc(sz);
+    int order = 0;
+    uint32_t pages = (sz + 4095) / 4096;
+    while (((uint32_t)1 << order) < pages) order++;
+    void *phys = alloc_pages(order);
+    if (!phys) return 0;
+    return phys_to_virt((uint64_t)phys);
+}
+
+static void free_cluster_buf(void *buf) {
+    if (!buf) return;
+    uint32_t sz = g_fs.cluster_size;
+    if (sz <= 2048) { kfree(buf); }
+    else {
+        uint64_t phys = virt_to_phys(buf);
+        int order = 0;
+        uint32_t pages = (sz + 4095) / 4096;
+        while (((uint32_t)1 << order) < pages) order++;
+        free_pages((void *)phys, order);
+    }
+}
+
 static void format_short_name(const struct fat32_dir_entry *e,
                               char *out, uint32_t out_len) {
     int j = 0;
@@ -154,62 +180,71 @@ static void format_short_name(const struct fat32_dir_entry *e,
     out[j] = 0;
 }
 
+
+struct cached_dir_entry {
+    char     name[256];
+    uint32_t cluster;
+    uint32_t size;
+    uint8_t  attr;
+};
+
 struct fat32_inode_data {
     uint32_t first_cluster;
     uint32_t size;
     int is_dir;
     int mounted;
+
+    /* Cache */
+    struct cached_dir_entry *cache;
+    uint32_t cache_count;
+    int      cache_valid;
 };
 
-static struct inode *fat32_lookup(struct inode *dir, const char *name) {
-    struct fat32_inode_data *d = (struct fat32_inode_data *)dir->fs_data;
-    if (!d || !d->is_dir) return 0;
-
-    uint8_t *cluster_buf = (uint8_t *)kmalloc(g_fs.cluster_size);
-    if (!cluster_buf) return 0;
-
-    char needle[256];
-    int n = 0;
-    while (name[n] && n < 255) {
-        char c = name[n];
-        if (c >= 'A' && c <= 'Z') c += 32;
-        needle[n] = c;
-        n++;
+static void fat32_free_inode_data(void *data) {
+    struct fat32_inode_data *d = (struct fat32_inode_data *)data;
+    if (!d) return;
+    if (d->cache) {
+        kfree(d->cache);
+        d->cache = 0;
     }
-    needle[n] = 0;
+    kfree(d);
+}
 
+static int fat32_build_dir_cache(struct inode *dir) {
+    struct fat32_inode_data *d = (struct fat32_inode_data *)dir->fs_data;
+    if (!d || !d->is_dir || d->cache_valid) return 0;
+
+    if (d->cache) {
+        kfree(d->cache);
+        d->cache = 0;
+        d->cache_count = 0;
+    }
+
+    void *cluster_buf = alloc_cluster_buf();
+    if (!cluster_buf) return -1;
+
+    uint32_t count = 0;
     uint32_t cluster = d->first_cluster;
-    int found = 0;
-    struct fat32_dir_entry found_entry;
+    int iterations = 0;
+    const int MAX_ITER = 65536;
 
     char     lfn_buf[256];
     uint32_t lfn_len = 0;
     int      lfn_active = 0;
 
-    int iterations = 0;
-    const int MAX_ITER = 65536;
-
-    while (cluster != 0 && cluster != 0xFFFFFFFF && !found) {
+    while (cluster != 0 && cluster != 0xFFFFFFFF) {
         if (++iterations > MAX_ITER) break;
         if (read_cluster(cluster, cluster_buf) != 0) break;
-
-        uint32_t n_entries = g_fs.cluster_size / 32;
+        uint32_t n = g_fs.cluster_size / 32;
         struct fat32_dir_entry *entries = (struct fat32_dir_entry *)cluster_buf;
-
-        for (uint32_t i = 0; i < n_entries; i++) {
+        for (uint32_t i = 0; i < n; i++) {
             uint8_t first = entries[i].name[0];
-
             if (first == 0) { cluster = 0xFFFFFFFF; break; }
-            if (first == 0xE5) {
-                lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
-                continue;
-            }
-
+            if (first == 0xE5) { lfn_active = 0; lfn_len = 0; continue; }
             if (entries[i].attr == FAT32_ATTR_LONG_NAME) {
                 struct fat32_lfn_entry *le = (struct fat32_lfn_entry *)&entries[i];
                 uint8_t seq = le->seq & 0x3F;
                 if (seq == 0 || seq > 20) continue;
-
                 uint32_t base = (uint32_t)(seq - 1) * 13;
                 int wrote = lfn_append_chars(le, lfn_buf, sizeof(lfn_buf), base);
                 if (wrote > 0) {
@@ -218,106 +253,35 @@ static struct inode *fat32_lookup(struct inode *dir, const char *name) {
                 }
                 continue;
             }
-
-            if (entries[i].attr & FAT32_ATTR_VOLUME_ID) {
-                lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
-                continue;
-            }
-
-            char short_name[16];
-            format_short_name(&entries[i], short_name, sizeof(short_name));
-
-            const char *effective_name;
-            if (lfn_active && lfn_len > 0) {
-                lfn_buf[lfn_len] = 0;
-                effective_name = lfn_buf;
-            } else {
-                effective_name = short_name;
-            }
-
-            char lower_name[256];
-            int k = 0;
-            while (effective_name[k] && k < 255) {
-                char c = effective_name[k];
-                if (c >= 'A' && c <= 'Z') c += 32;
-                lower_name[k] = c;
-                k++;
-            }
-            lower_name[k] = 0;
-
-            int j = 0;
-            while (lower_name[j] && needle[j] && lower_name[j] == needle[j]) j++;
-            if (lower_name[j] == 0 && needle[j] == 0) {
-                found_entry = entries[i];
-                found = 1;
-                break;
-            }
-
-            lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
+            if (entries[i].attr & FAT32_ATTR_VOLUME_ID) { lfn_active = 0; lfn_len = 0; continue; }
+            count++;
+            lfn_active = 0; lfn_len = 0;
         }
-
-        if (!found) cluster = fat_next_cluster(cluster);
+        if (cluster != 0xFFFFFFFF) cluster = fat_next_cluster(cluster);
     }
 
-    kfree(cluster_buf);
+    if (count == 0) {
+        free_cluster_buf(cluster_buf);
+        d->cache_valid = 1;
+        return 0;
+    }
 
-    if (!found) return 0;
+    d->cache = (struct cached_dir_entry *)kmalloc(
+        count * sizeof(struct cached_dir_entry));
+    if (!d->cache) { free_cluster_buf(cluster_buf); return -1; }
 
-    struct inode *i = vfs_alloc_inode();
-    if (!i) return 0;
+    cluster = d->first_cluster;
+    iterations = 0;
+    lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
+    uint32_t idx = 0;
 
-    struct fat32_inode_data *nd =
-        (struct fat32_inode_data *)kmalloc(sizeof(*nd));
-    if (!nd) { vfs_free_inode(i); return 0; }
-
-    uint32_t low = found_entry.low_cluster;
-    uint32_t high = found_entry.high_cluster;
-    nd->first_cluster = (high << 16) | low;
-    nd->size = found_entry.file_size;
-    nd->is_dir = (found_entry.attr & FAT32_ATTR_DIRECTORY) ? 1 : 0;
-    nd->mounted = 0;
-
-    i->ino = nd->first_cluster;
-    i->mode = nd->is_dir ? (S_IFDIR | 0755) : (S_IFREG | 0644);
-    i->uid = 0;
-    i->gid = 0;
-    i->size = nd->size;
-    i->fs_data = nd;
-    i->i_op = dir->i_op;
-    i->f_op = dir->f_op;
-
-    return i;
-}
-
-static int fat32_readdir(struct inode *dir, uint64_t index,
-                          char *out_name, uint64_t name_len) {
-    struct fat32_inode_data *d = (struct fat32_inode_data *)dir->fs_data;
-    if (!d || !d->is_dir) return -1;
-
-    uint8_t *cluster_buf = (uint8_t *)kmalloc(g_fs.cluster_size);
-    if (!cluster_buf) return -1;
-
-    uint32_t cluster = d->first_cluster;
-    uint64_t found = 0;
-    int result = -1;
-
-    char     lfn_buf[256];
-    uint32_t lfn_len = 0;
-    int      lfn_active = 0;
-
-    int iterations = 0;
-    const int MAX_ITER = 65536;
-
-    while (cluster != 0 && cluster != 0xFFFFFFFF) {
+    while (cluster != 0 && cluster != 0xFFFFFFFF && idx < count) {
         if (++iterations > MAX_ITER) break;
         if (read_cluster(cluster, cluster_buf) != 0) break;
-
-        uint32_t n_entries = g_fs.cluster_size / 32;
+        uint32_t n = g_fs.cluster_size / 32;
         struct fat32_dir_entry *entries = (struct fat32_dir_entry *)cluster_buf;
-
-        for (uint32_t i = 0; i < n_entries; i++) {
+        for (uint32_t i = 0; i < n && idx < count; i++) {
             uint8_t first = entries[i].name[0];
-
             if (first == 0) { cluster = 0xFFFFFFFF; break; }
             if (first == 0xE5) { lfn_active = 0; lfn_len = 0; continue; }
 
@@ -341,39 +305,116 @@ static int fat32_readdir(struct inode *dir, uint64_t index,
             char short_name[16];
             format_short_name(&entries[i], short_name, sizeof(short_name));
 
-            const char *effective_name;
+            struct cached_dir_entry *ce = &d->cache[idx];
             if (lfn_active && lfn_len > 0) {
                 lfn_buf[lfn_len] = 0;
-                effective_name = lfn_buf;
-            } else {
-                effective_name = short_name;
-            }
-
-            if (effective_name[0] == 0) {
-                lfn_active = 0; lfn_len = 0; continue;
-            }
-
-            if (found == index) {
                 int k = 0;
-                while (effective_name[k] && (uint64_t)k < name_len - 1) {
-                    out_name[k] = effective_name[k];
-                    k++;
-                }
-                out_name[k] = 0;
-                result = k;
-                goto done;
+                while (lfn_buf[k] && k < 255) { ce->name[k] = lfn_buf[k]; k++; }
+                ce->name[k] = 0;
+            } else {
+                int k = 0;
+                while (short_name[k] && k < 255) { ce->name[k] = short_name[k]; k++; }
+                ce->name[k] = 0;
             }
-            found++;
+
+            ce->cluster = ((uint32_t)entries[i].high_cluster << 16)
+                        | entries[i].low_cluster;
+            ce->size = entries[i].file_size;
+            ce->attr = entries[i].attr;
+
+            idx++;
             lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
         }
-
-        cluster = fat_next_cluster(cluster);
+        if (cluster != 0xFFFFFFFF) cluster = fat_next_cluster(cluster);
     }
 
-done:
-    kfree(cluster_buf);
-    return result;
+    free_cluster_buf(cluster_buf);
+    d->cache_count = idx;
+    d->cache_valid = 1;
+    return 0;
 }
+
+
+static struct inode *fat32_lookup(struct inode *dir, const char *name) {
+    struct fat32_inode_data *d = (struct fat32_inode_data *)dir->fs_data;
+    if (!d || !d->is_dir) return 0;
+
+    if (fat32_build_dir_cache(dir) != 0) return 0;
+
+    char needle[256];
+    int n = 0;
+    while (name[n] && n < 255) {
+        char c = name[n];
+        if (c >= 'A' && c <= 'Z') c += 32;
+        needle[n] = c;
+        n++;
+    }
+    needle[n] = 0;
+
+    for (uint32_t i = 0; i < d->cache_count; i++) {
+        struct cached_dir_entry *ce = &d->cache[i];
+
+        char lower[256];
+        int k = 0;
+        while (ce->name[k] && k < 255) {
+            char c = ce->name[k];
+            if (c >= 'A' && c <= 'Z') c += 32;
+            lower[k] = c;
+            k++;
+        }
+        lower[k] = 0;
+
+        int j = 0;
+        while (lower[j] && needle[j] && lower[j] == needle[j]) j++;
+        if (lower[j] == 0 && needle[j] == 0) {
+            struct inode *ino = vfs_alloc_inode();
+            if (!ino) return 0;
+            struct fat32_inode_data *nd =
+                (struct fat32_inode_data *)kmalloc(sizeof(*nd));
+            if (!nd) { vfs_free_inode(ino); return 0; }
+
+            nd->first_cluster = ce->cluster;
+            nd->size = ce->size;
+            nd->is_dir = (ce->attr & FAT32_ATTR_DIRECTORY) ? 1 : 0;
+            nd->mounted = 0;
+            nd->cache = 0;
+            nd->cache_count = 0;
+            nd->cache_valid = 0;
+
+            ino->ino = ce->cluster;
+            ino->mode = nd->is_dir ? (S_IFDIR | 0755) : (S_IFREG | 0644);
+            ino->uid = 0;
+            ino->gid = 0;
+            ino->size = ce->size;
+            ino->fs_data = nd;
+            ino->i_op = dir->i_op;
+            ino->f_op = dir->f_op;
+            ino->mount = dir->mount;
+
+            return ino;
+        }
+    }
+    return 0;
+}
+
+static int fat32_readdir(struct inode *dir, uint64_t index,
+                          char *out_name, uint64_t name_len) {
+    struct fat32_inode_data *d = (struct fat32_inode_data *)dir->fs_data;
+    if (!d || !d->is_dir) return -1;
+
+    if (fat32_build_dir_cache(dir) != 0) return -1;
+    if (index >= d->cache_count) return -1;
+
+    struct cached_dir_entry *ce = &d->cache[index];
+    int k = 0;
+    while (ce->name[k] && (uint64_t)k < name_len - 1) {
+        out_name[k] = ce->name[k];
+        k++;
+    }
+    out_name[k] = 0;
+    return k;
+}
+
 
 static int fat32_read(struct file *f, void *buf, uint64_t count) {
     struct fat32_inode_data *d = (struct fat32_inode_data *)f->inode->fs_data;
@@ -384,14 +425,14 @@ static int fat32_read(struct file *f, void *buf, uint64_t count) {
     uint64_t remaining = d->size - f->pos;
     uint64_t to_read = count < remaining ? count : remaining;
 
-    uint8_t *cluster_buf = (uint8_t *)kmalloc(g_fs.cluster_size);
+    void *cluster_buf = alloc_cluster_buf();
     if (!cluster_buf) return -1;
 
     uint32_t cluster = d->first_cluster;
     uint64_t skip = f->pos / g_fs.cluster_size;
     for (uint64_t i = 0; i < skip; i++) {
         cluster = fat_next_cluster(cluster);
-        if (cluster == 0xFFFFFFFF) { kfree(cluster_buf); return -1; }
+        if (cluster == 0xFFFFFFFF) { free_cluster_buf(cluster_buf); return -1; }
     }
 
     uint64_t pos_in_cluster = f->pos % g_fs.cluster_size;
@@ -405,7 +446,7 @@ static int fat32_read(struct file *f, void *buf, uint64_t count) {
         if (chunk > avail) chunk = avail;
 
         for (uint64_t i = 0; i < chunk; i++) {
-            ((uint8_t *)buf)[bytes_read + i] = cluster_buf[pos_in_cluster + i];
+            ((uint8_t *)buf)[bytes_read + i] = ((uint8_t *)cluster_buf)[pos_in_cluster + i];
         }
 
         bytes_read += chunk;
@@ -418,7 +459,7 @@ static int fat32_read(struct file *f, void *buf, uint64_t count) {
         }
     }
 
-    kfree(cluster_buf);
+    free_cluster_buf(cluster_buf);
     return (int)bytes_read;
 }
 
@@ -516,6 +557,9 @@ int fat32_mount(const char *mount_path) {
     root_d->size = 0;
     root_d->is_dir = 1;
     root_d->mounted = 1;
+    root_d->cache = 0;
+    root_d->cache_count = 0;
+    root_d->cache_valid = 0;
 
     root->ino = g_fs.root_cluster;
     root->mode = S_IFDIR | 0755;
@@ -530,6 +574,8 @@ int fat32_mount(const char *mount_path) {
         kprintf("  FAT32: vfs_mount failed\n");
         return -1;
     }
+
+    vfs_mount_set_free_hook(mount_path, fat32_free_inode_data);
 
     kprintf("  FAT32: mounted successfully\n");
     return 0;

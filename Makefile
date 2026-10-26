@@ -84,6 +84,8 @@ $(UEFI_IMG): $(UEFI_EFI) $(KERNEL_ELF)
 	mmd -i $@ ::/EFI/BOOT
 	mcopy -i $@ $(UEFI_EFI) ::/EFI/BOOT/BOOTX64.EFI
 	mcopy -i $@ $(KERNEL_ELF) ::/EFI/BOOT/kernel.elf
+	printf 'hello from a long name\n' > /tmp/longfilename.txt
+	mcopy -i $@ /tmp/longfilename.txt ::/longfilename.txt
 
 $(OVMF_VARS_COPY): $(OVMF_VARS) | build
 	cp $< $@

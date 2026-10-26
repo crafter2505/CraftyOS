@@ -29,7 +29,7 @@ void test_fat32(void) {
     }
 
     /* Test 3: open /mnt/EFI/BOOT/kernel.elf */
-    struct file *f = vfs_open("/mnt/efi/boot/kernel.elf", O_RDONLY);
+    struct file *f = vfs_open("/mnt/EFI/BOOT/kernel.elf", O_RDONLY);
     if (!f) {
         kprintf("  [3] FAIL: cannot open kernel.elf\n");
         return;

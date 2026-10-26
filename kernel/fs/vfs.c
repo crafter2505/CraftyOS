@@ -28,6 +28,9 @@ int vfs_mount(const char *path, struct inode *root) {
 
     m->root = root;
     m->next = 0;
+    m->free_inode_data = 0;
+
+    root->mount = m;
 
     if (path[0] == '/' && path[1] == 0) {
         root_mount = m;
@@ -43,6 +46,17 @@ int vfs_mount(const char *path, struct inode *root) {
 
     kprintf("  VFS: mounted '%s'\n", path);
     return 0;
+}
+
+void vfs_mount_set_free_hook(const char *path, void (*hook)(void *)) {
+    for (struct vfs_mount *m = mounts; m; m = m->next) {
+        int i = 0;
+        while (m->path[i] && path[i] && m->path[i] == path[i]) i++;
+        if (m->path[i] == 0 && path[i] == 0) {
+            m->free_inode_data = hook;
+            return;
+        }
+    }
 }
 
 struct inode *vfs_lookup(const char *path) {
@@ -70,11 +84,9 @@ struct inode *vfs_lookup(const char *path) {
         rest = path + best_len;
     }
 
-    /* Root path */
     if (rest[0] == 0) return cur;
     if (rest[0] == '/' && rest[1] == 0) return cur;
 
-    /* Skip leading slash */
     if (*rest == '/') rest++;
 
     char name[256];
@@ -161,6 +173,20 @@ int vfs_readdir(struct inode *dir, uint64_t index,
     return dir->i_op->readdir(dir, index, out_name, name_len);
 }
 
+int vfs_stat(const char *path, struct vfs_stat *out) {
+    if (!path || !out) return -1;
+    struct inode *i = vfs_lookup(path);
+    if (!i) return -1;
+    out->size  = i->size;
+    out->mode  = i->mode;
+    out->uid   = i->uid;
+    out->gid   = i->gid;
+    out->mtime = i->mtime;
+    out->atime = i->atime;
+    out->ctime = i->ctime;
+    return 0;
+}
+
 struct inode *vfs_alloc_inode(void) {
     struct inode *i = (struct inode *)kmalloc(sizeof(struct inode));
     if (!i) return 0;
@@ -170,5 +196,10 @@ struct inode *vfs_alloc_inode(void) {
 }
 
 void vfs_free_inode(struct inode *i) {
-    if (i) kfree(i);
+    if (!i) return;
+    if (i->fs_data && i->mount && i->mount->free_inode_data) {
+        i->mount->free_inode_data(i->fs_data);
+        i->fs_data = 0;
+    }
+    kfree(i);
 }

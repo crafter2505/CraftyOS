@@ -3,7 +3,6 @@
 
 #include "types.h"
 
-/* File types */
 #define S_IFMT   0170000
 #define S_IFREG  0100000
 #define S_IFDIR  0040000
@@ -13,7 +12,6 @@
 #define S_IFLNK  0120000
 #define S_IFSOCK 0140000
 
-/* Permissions */
 #define S_IRWXU  00700
 #define S_IRUSR  00400
 #define S_IWUSR  00200
@@ -27,7 +25,6 @@
 #define S_IWOTH  00002
 #define S_IXOTH  00001
 
-/* Open flags */
 #define O_RDONLY 0x0000
 #define O_WRONLY 0x0001
 #define O_RDWR   0x0002
@@ -36,23 +33,17 @@
 #define O_APPEND 0x0400
 #define O_DIRECTORY 0x10000
 
-/* Lseek */
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
 
-/* -----------------------------------------------------------------
- * Forward declarations — required for circular references
- * ----------------------------------------------------------------- */
+
 struct inode;
 struct file;
 struct vfs_mount;
 struct inode_operations;
 struct file_operations;
 
-/* -----------------------------------------------------------------
- * File operations — references struct file (forward-declared)
- * ----------------------------------------------------------------- */
 struct file_operations {
     int (*read)(struct file *f, void *buf, uint64_t count);
     int (*write)(struct file *f, const void *buf, uint64_t count);
@@ -60,9 +51,6 @@ struct file_operations {
     int (*close)(struct file *f);
 };
 
-/* -----------------------------------------------------------------
- * Inode operations — references struct inode (forward-declared)
- * ----------------------------------------------------------------- */
 struct inode_operations {
     struct inode *(*lookup)(struct inode *dir, const char *name);
     int (*readdir)(struct inode *dir, uint64_t index,
@@ -71,9 +59,7 @@ struct inode_operations {
     int (*unlink)(struct inode *dir, const char *name);
 };
 
-/* -----------------------------------------------------------------
- * struct file — an open file handle
- * ----------------------------------------------------------------- */
+
 struct file {
     struct inode *inode;
     uint64_t pos;
@@ -81,18 +67,14 @@ struct file {
     uint32_t refcount;
 };
 
-/* -----------------------------------------------------------------
- * struct vfs_mount — a mounted filesystem
- * ----------------------------------------------------------------- */
+
 struct vfs_mount {
     struct inode *root;
     char path[256];
     struct vfs_mount *next;
+    void (*free_inode_data)(void *);
 };
 
-/* -----------------------------------------------------------------
- * struct inode — the main VFS object
- * ----------------------------------------------------------------- */
 struct inode {
     uint64_t ino;
     uint32_t mode;
@@ -115,11 +97,20 @@ struct inode {
     uint32_t _pad2;
 };
 
-/* -----------------------------------------------------------------
- * VFS API
- * ----------------------------------------------------------------- */
+struct vfs_stat {
+    uint64_t size;
+    uint32_t mode;
+    uint32_t uid;
+    uint32_t gid;
+    uint64_t mtime;
+    uint64_t atime;
+    uint64_t ctime;
+};
+
+int vfs_stat(const char *path, struct vfs_stat *out);
 void vfs_init(void);
 int vfs_mount(const char *path, struct inode *root);
+void vfs_mount_set_free_hook(const char *path, void (*hook)(void *));
 struct inode *vfs_lookup(const char *path);
 struct file *vfs_open(const char *path, uint32_t flags);
 int vfs_read(struct file *f, void *buf, uint64_t count);
