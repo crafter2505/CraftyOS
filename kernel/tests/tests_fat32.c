@@ -96,5 +96,13 @@ void test_fat32(void) {
     }
     kprintf("  [7] PASS: readdir\n");
 
+    /* Test 8: stat */
+    struct vfs_stat st;
+    if (vfs_stat("/mnt/efi/boot/kernel.elf", &st) == 0) {
+        kprintf("  [8] PASS: stat size=%d mode=0x%x\n", st.size, (uint64_t)st.mode);
+    } else {
+        kprintf("  [8] FAIL: stat\n");
+    };
+
     kprintf("=== FAT32 test done ===\n");
 }

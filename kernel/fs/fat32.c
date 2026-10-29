@@ -114,8 +114,10 @@ static int lfn_append_chars(struct fat32_lfn_entry *e, char *out,
 static struct fat32_fs g_fs;
 
 static int read_sectors(uint64_t lba, uint32_t count, void *buf) {
+    if (!buf) return -1;
     for (uint32_t i = 0; i < count; i++) {
-        if (ahci_read_sector(g_fs.port, lba + i, (uint8_t *)buf + i * 512) != 0) {
+        if (ahci_read_sector(g_fs.port, lba + i,
+                             (uint8_t *)buf + i * 512) != 0) {
             return -1;
         }
     }
@@ -128,10 +130,15 @@ static int read_cluster(uint32_t cluster, void *buf) {
 }
 
 static uint32_t fat_next_cluster(uint32_t cluster) {
+    if (cluster < 2) return 0xFFFFFFFF;
     if (cluster >= g_fs.fat_entries) return 0xFFFFFFFF;
+
     uint32_t val = g_fs.fat[cluster] & 0x0FFFFFFF;
+    if (val == 0x0FFFFFF7) return 0xFFFFFFFF;
     if (val >= 0x0FFFFFF8) return 0xFFFFFFFF;
-    if (val == 0) return 0xFFFFFFFF;
+    if (val < 2) return 0xFFFFFFFF;
+    if (val >= g_fs.fat_entries) return 0xFFFFFFFF;
+
     return val;
 }
 
@@ -194,7 +201,6 @@ struct fat32_inode_data {
     int is_dir;
     int mounted;
 
-    /* Cache */
     struct cached_dir_entry *cache;
     uint32_t cache_count;
     int      cache_valid;
@@ -272,7 +278,9 @@ static int fat32_build_dir_cache(struct inode *dir) {
 
     cluster = d->first_cluster;
     iterations = 0;
-    lfn_active = 0; lfn_len = 0; lfn_buf[0] = 0;
+    lfn_active = 0;
+    lfn_len = 0;
+    lfn_buf[0] = 0;
     uint32_t idx = 0;
 
     while (cluster != 0 && cluster != 0xFFFFFFFF && idx < count) {
@@ -505,6 +513,28 @@ int fat32_mount(const char *mount_path) {
 
     if (bpb->bytes_per_sector != 512) {
         kprintf("  FAT32: unsupported sector size %d\n", (uint64_t)bpb->bytes_per_sector);
+        return -1;
+    }
+
+    if (bpb->sectors_per_cluster == 0 || bpb->sectors_per_cluster > 128) {
+        kprintf("  FAT32: invalid sectors_per_cluster %d\n",
+                (uint64_t)bpb->sectors_per_cluster);
+        return -1;
+    }
+
+    if (bpb->num_fats == 0 || bpb->num_fats > 2) {
+        kprintf("  FAT32: invalid num_fats %d\n", (uint64_t)bpb->num_fats);
+        return -1;
+    }
+
+    if (bpb->fat_size_32 == 0) {
+        kprintf("  FAT32: invalid fat_size_32 0\n");
+        return -1;
+    }
+
+    if (bpb->root_cluster < 2) {
+        kprintf("  FAT32: invalid root_cluster %d\n",
+                (uint64_t)bpb->root_cluster);
         return -1;
     }
 
