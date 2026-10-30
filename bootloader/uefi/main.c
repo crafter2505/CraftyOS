@@ -27,6 +27,29 @@ static void print(const CHAR16 *text) {
     console->OutputString(console, (CHAR16 *)text);
 }
 
+static void print_hex(uint64_t value) {
+    static const CHAR16 digits[] = L"0123456789abcdef";
+    CHAR16 buf[19];
+    buf[0] = L'0'; buf[1] = L'x';
+    for (int i = 0; i < 16; i++) {
+        buf[2 + i] = digits[(value >> ((15 - i) * 4)) & 0xF];
+    }
+    buf[18] = 0;
+    print(buf);
+}
+
+static void print_dec(uint64_t value) {
+    CHAR16 buf[21];
+    int i = 20;
+    buf[20] = 0;
+    if (value == 0) buf[--i] = L'0';
+    while (value > 0) {
+        buf[--i] = L'0' + (value % 10);
+        value /= 10;
+    }
+    print(&buf[i]);
+}
+
 static int add_overflow_u64(uint64_t a, uint64_t b, uint64_t *result) {
     *result = a + b;
     return *result < a;
@@ -228,6 +251,35 @@ static EFI_STATUS get_file_info(EFI_BOOT_SERVICES *bs,
     return status;
 }
 
+static int fill_framebuffer_info(EFI_BOOT_SERVICES *bs,
+                                 struct boot_info *boot_info) {
+    EFI_GRAPHICS_OUTPUT_PROTOCOL *gop = NULL;
+    EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+    EFI_STATUS status = bs->LocateProtocol(&gop_guid, NULL, (void **)&gop);
+    if (status != EFI_SUCCESS || !gop || !gop->Mode) {
+        print(L"No GOP framebuffer available\r\n");
+        return 0;
+    }
+
+    EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info = gop->Mode->Info;
+    if (!info) return 0;
+
+    boot_info->fb_addr   = gop->Mode->FrameBufferBase;
+    boot_info->fb_width  = info->HorizontalResolution;
+    boot_info->fb_height = info->VerticalResolution;
+    boot_info->fb_pitch  = info->PixelsPerScanLine * 4;
+    boot_info->fb_bpp    = 32;
+
+    print(L"Framebuffer: ");
+    print_hex(boot_info->fb_addr);
+    print(L" ");
+    print_dec(info->HorizontalResolution);
+    print(L"x");
+    print_dec(info->VerticalResolution);
+    print(L"\r\n");
+    return 1;
+}
+
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st);
 
 __attribute__((noreturn))
@@ -377,6 +429,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *st) {
     boot_info->kernel_phys_base = KERNEL_PHYS_BASE;
     boot_info->kernel_phys_end = kernel_end;
     boot_info->pml4_phys = page_tables_phys;
+
+    fill_framebuffer_info(bs, boot_info);
 
     print(L"Exiting UEFI boot services and starting kernel...\r\n");
     UINTN map_capacity = 0;

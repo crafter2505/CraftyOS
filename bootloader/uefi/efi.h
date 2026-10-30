@@ -265,6 +265,59 @@ struct EFI_FILE_PROTOCOL {
     EFI_STATUS (EFIAPI *Flush)(EFI_FILE_PROTOCOL *This);
 };
 
+#define EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID \
+    { 0x9042A9DE, 0x23DC, 0x4A38, \
+      { 0x96, 0xFB, 0x7A, 0xDE, 0xD0, 0x80, 0x51, 0x6A } }
+
+typedef struct {
+    uint32_t RedMask;
+    uint32_t GreenMask;
+    uint32_t BlueMask;
+    uint32_t ReservedMask;
+} EFI_PIXEL_BITMASK;
+
+typedef enum {
+    PixelRedGreenBlueReserved8BitPerColor,
+    PixelBlueGreenRedReserved8BitPerColor,
+    PixelBitMask,
+    PixelBltOnly,
+    PixelFormatMax
+} EFI_GRAPHICS_PIXEL_FORMAT;
+
+typedef struct {
+    uint32_t Version;
+    uint32_t HorizontalResolution;
+    uint32_t VerticalResolution;
+    EFI_GRAPHICS_PIXEL_FORMAT PixelFormat;
+    EFI_PIXEL_BITMASK PixelInformation;
+    uint32_t PixelsPerScanLine;
+} EFI_GRAPHICS_OUTPUT_MODE_INFORMATION;
+
+typedef struct {
+    uint32_t MaxMode;
+    uint32_t Mode;
+    EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *Info;
+    UINTN SizeOfInfo;
+    uint64_t FrameBufferBase;
+    UINTN FrameBufferSize;
+} EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE;
+
+typedef struct EFI_GRAPHICS_OUTPUT_PROTOCOL EFI_GRAPHICS_OUTPUT_PROTOCOL;
+
+struct EFI_GRAPHICS_OUTPUT_PROTOCOL {
+    EFI_STATUS (EFIAPI *QueryMode)(
+        EFI_GRAPHICS_OUTPUT_PROTOCOL *This, uint32_t ModeNumber,
+        UINTN *SizeOfInfo, EFI_GRAPHICS_OUTPUT_MODE_INFORMATION **Info);
+    EFI_STATUS (EFIAPI *SetMode)(
+        EFI_GRAPHICS_OUTPUT_PROTOCOL *This, uint32_t ModeNumber);
+    EFI_STATUS (EFIAPI *Blt)(
+        EFI_GRAPHICS_OUTPUT_PROTOCOL *This, void *BltBuffer,
+        uint32_t BltOperation, UINTN SourceX, UINTN SourceY,
+        UINTN DestinationX, UINTN DestinationY,
+        UINTN Width, UINTN Height, UINTN Delta);
+    EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *Mode;
+};
+
 _Static_assert(sizeof(EFI_TABLE_HEADER) == 24, "UEFI table header size mismatch");
 _Static_assert(offsetof(EFI_BOOT_SERVICES, SetWatchdogTimer) == 0x100,
                "SetWatchdogTimer offset mismatch");
@@ -276,5 +329,9 @@ _Static_assert(offsetof(EFI_LOADED_IMAGE_PROTOCOL, DeviceHandle) == 24,
                "Loaded Image DeviceHandle offset mismatch");
 _Static_assert(offsetof(EFI_FILE_PROTOCOL, GetInfo) == 64,
                "File Protocol GetInfo offset mismatch");
+_Static_assert(offsetof(EFI_GRAPHICS_OUTPUT_PROTOCOL, Mode) == 24,
+               "GOP Mode offset mismatch");
+_Static_assert(sizeof(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION) == 36,
+               "GOP mode info size mismatch");
 
 #endif

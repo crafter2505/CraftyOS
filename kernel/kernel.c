@@ -15,6 +15,8 @@
 #include "ramfs.h"
 #include "fat32.h"
 
+#include "fb.h"
+
 #include "pmm.h"
 #include "buddy.h"
 #include "kmalloc.h"
@@ -43,12 +45,33 @@ void _start(struct boot_info *boot_info) {
         serial_puts("Invalid UEFI boot information\n");
         for (;;) __asm__ volatile ("cli; hlt");
     }
+
+    int fb_ok = 0;
+    if (boot_info) {
+        fb_ok = fb_init(boot_info);
+        if (fb_ok) {
+            serial_puts("FB: initialized\n");
+            fb_clear(0x00102030);
+            fb_draw_char(100, 100, 'c', 0x00FFFFFF, 0x00102030);
+            fb_draw_char(108, 100, 'r', 0x00FFFFFF, 0x00102030);
+            fb_draw_char(116, 100, 'a', 0x00FFFFFF, 0x00102030);
+            fb_draw_char(124, 100, 'f', 0x00FFFFFF, 0x00102030);
+            fb_draw_char(132, 100, 't', 0x00FFFFFF, 0x00102030);
+            fb_draw_char(140, 100, 'y', 0x00FFFFFF, 0x00102030);
+            fb_draw_char(148, 100, 'O', 0x00FFFFFF, 0x00102030);
+            fb_draw_char(156, 100, 'S', 0x00FFFFFF, 0x00102030);
+            for (volatile int spin = 0; spin < 50000000; spin++);
+        } else {
+            serial_puts("FB: unavailable, using VGA/serial\n");
+        }
+    }
+
     terminal_init();
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     terminal_clear();
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("craftyOS v0.16.4");
+    kprintf("craftyOS v0.17.0");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     if (boot_info) {
         kprintf(" (UEFI boot)\n");
