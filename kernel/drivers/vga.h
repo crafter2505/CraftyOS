@@ -25,6 +25,7 @@ void vga_set_cell(int row, int col, char c, unsigned char attr);
 void vga_clear_screen(unsigned char attr);
 void vga_update_cursor(int row, int col);
 void vga_hide_cursor(void);
+void vga_scroll_up(unsigned char attr);
 
 unsigned char vga_make_attr(unsigned char fg, unsigned char bg);
 

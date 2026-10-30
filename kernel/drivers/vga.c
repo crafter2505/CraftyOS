@@ -48,6 +48,17 @@ void vga_update_cursor(int row, int col) {
     outb(VGA_DATA_REG, pos & 0xFF);
 }
 
+void vga_scroll_up(unsigned char attr) {
+    volatile unsigned short *vga = VGA_MEMORY;
+    for (int i = 0; i < (VGA_HEIGHT - 1) * VGA_WIDTH; i++) {
+        vga[i] = vga[i + VGA_WIDTH];
+    }
+    unsigned short blank = (unsigned short)' ' | ((unsigned short)attr << 8);
+    for (int i = (VGA_HEIGHT - 1) * VGA_WIDTH; i < VGA_HEIGHT * VGA_WIDTH; i++) {
+        vga[i] = blank;
+    }
+}
+
 void vga_hide_cursor(void) {
     outb(VGA_CTRL_REG, 0x0A);
     outb(VGA_DATA_REG, 0x20);

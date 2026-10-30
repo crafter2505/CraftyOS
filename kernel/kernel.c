@@ -46,21 +46,14 @@ void _start(struct boot_info *boot_info) {
         for (;;) __asm__ volatile ("cli; hlt");
     }
 
+    /* Bring up the framebuffer before the terminal so terminal_init()
+     * knows whether to paint pixels or VGA cells. */
     int fb_ok = 0;
     if (boot_info) {
         fb_ok = fb_init(boot_info);
         if (fb_ok) {
-            serial_puts("FB: initialized\n");
-            fb_clear(0x00102030);
-            fb_draw_char(100, 100, 'c', 0x00FFFFFF, 0x00102030);
-            fb_draw_char(108, 100, 'r', 0x00FFFFFF, 0x00102030);
-            fb_draw_char(116, 100, 'a', 0x00FFFFFF, 0x00102030);
-            fb_draw_char(124, 100, 'f', 0x00FFFFFF, 0x00102030);
-            fb_draw_char(132, 100, 't', 0x00FFFFFF, 0x00102030);
-            fb_draw_char(140, 100, 'y', 0x00FFFFFF, 0x00102030);
-            fb_draw_char(148, 100, 'O', 0x00FFFFFF, 0x00102030);
-            fb_draw_char(156, 100, 'S', 0x00FFFFFF, 0x00102030);
-            for (volatile int spin = 0; spin < 50000000; spin++);
+            terminal_enable_fb();
+            serial_puts("FB: framebuffer active\n");
         } else {
             serial_puts("FB: unavailable, using VGA/serial\n");
         }
@@ -77,7 +70,13 @@ void _start(struct boot_info *boot_info) {
         kprintf(" (UEFI boot)\n");
         kprintf("UEFI memmap: %d entries at phys 0x%x\n",
                 (uint64_t)boot_info->memmap_count, boot_info->memmap_phys);
-    }else {
+        if (fb_ok) {
+            kprintf("framebuffer: 0x%x %dx%d\n",
+                    boot_info->fb_addr,
+                    (uint64_t)boot_info->fb_width,
+                    (uint64_t)boot_info->fb_height);
+        }
+    } else {
         kprintf(" (BIOS boot)\n");
     }
     kprintf("=======================\n\n");
