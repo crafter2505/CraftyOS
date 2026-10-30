@@ -92,6 +92,32 @@ static int copy_user_string(uint64_t user_ptr, char *kernel_buf,
     return -1;
 }
 
+static int copy_to_user(uint64_t user_ptr, const void *kernel_buf,
+                         uint64_t len) {
+    if (!kernel_buf || len == 0) return -1;
+    if (user_ptr == 0) return -1;
+    if (user_ptr >= USER_SPACE_MAX) return -1;
+
+    uint64_t current_page = user_ptr & ~0xFFFULL;
+    if (!vmm_is_user_accessible(current_page)) return -1;
+
+    uint8_t *u = (uint8_t *)user_ptr;
+    const uint8_t *k = (const uint8_t *)kernel_buf;
+
+    for (uint64_t i = 0; i < len; i++) {
+        uint64_t addr = user_ptr + i;
+        uint64_t page = addr & ~0xFFFULL;
+
+        if (page != current_page) {
+            if (!vmm_is_user_accessible(page)) return -1;
+            current_page = page;
+        }
+
+        u[i] = k[i];
+    }
+    return (int)len;
+}
+
 static int64_t sys_open(uint64_t path_user, uint32_t flags) {
     if (path_user == 0) return -1;
     if (flags & ~(uint32_t)MAX_OPEN_FLAGS) return -1;
@@ -125,6 +151,44 @@ static int64_t sys_close(int fd) {
     struct process *p = process_current();
     if (!p) return -1;
     return fd_close(&p->fds, fd);
+}
+
+static int64_t sys_read(int fd, uint64_t user_buf, uint64_t count) {
+    if (user_buf == 0 || count == 0) return -1;
+
+    struct process *p = process_current();
+    if (!p) return -1;
+
+    struct file *f = fd_get(&p->fds, fd);
+    if (!f) return -1;
+
+    uint64_t to_read = count > 4096 ? 4096 : count;
+
+    uint8_t *bounce = (uint8_t *)kmalloc(to_read);
+    if (!bounce) return -1;
+
+    int n = vfs_read(f, bounce, to_read);
+
+    if (n > 0) {
+        int copied = copy_to_user(user_buf, bounce, (uint64_t)n);
+        if (copied < 0) {
+            kfree(bounce);
+            return -1;
+        }
+    }
+
+    kfree(bounce);
+    return n;
+}
+
+static int64_t sys_lseek(int fd, int64_t offset, int whence) {
+    struct process *p = process_current();
+    if (!p) return -1;
+
+    struct file *f = fd_get(&p->fds, fd);
+    if (!f) return -1;
+
+    return (int64_t)vfs_seek(f, (uint64_t)offset, whence);
 }
 
 void syscall_handler(uint64_t sysno, struct registers *regs) {
@@ -178,6 +242,16 @@ void syscall_handler(uint64_t sysno, struct registers *regs) {
     }
     case SYS_close: {
         int64_t ret = sys_close((int)regs->rdi);
+        regs->rax = (uint64_t)ret;
+        break;
+    }
+    case SYS_read: {
+        int64_t ret = sys_read((int)regs->rdi, regs->rsi, regs->rdx);
+        regs->rax = (uint64_t)ret;
+        break;
+    }
+    case SYS_lseek: {
+        int64_t ret = sys_lseek((int)regs->rdi, (int64_t)regs->rsi, (int)regs->rdx);
         regs->rax = (uint64_t)ret;
         break;
     }

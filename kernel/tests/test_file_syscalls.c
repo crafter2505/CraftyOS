@@ -17,8 +17,6 @@ static void file_test_thread(void *arg) {
         _user_file_program_start,
         _user_file_program_end - _user_file_program_start);
 
-    /* userspace_run_program returns 0 on clean exit, -1 on failure.
-     * The actual exit status is captured in the process's exit_status. */
     file_test_status = ret;
     file_test_done = 1;
     thread_exit();
@@ -44,9 +42,8 @@ void test_file_syscalls(void) {
     }
 
     if (file_test_done && file_test_status == 0) {
-        kprintf("  PASS: user opened and closed /mnt/efi/boot/kernel.elf\n");
+        kprintf("  PASS: user opened, read ELF magic, and closed\n");
     } else {
-        kprintf("  FAIL: user program exit status %d\n",
-                (uint64_t)file_test_status);
+        kprintf("  FAIL: exit status %d\n", (uint64_t)file_test_status);
     }
 }
