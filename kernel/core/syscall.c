@@ -7,6 +7,9 @@
 #include "terminal.h"
 #include "process.h"
 #include "thread.h"
+#include "fd.h"
+#include "kmalloc.h"
+#include "vfs.h"
 
 #define IA32_EFER    0xC0000080
 #define IA32_STAR    0xC0000081
@@ -16,6 +19,9 @@
 #define KERNEL_CS    0x10
 #define USER_CS      0x28
 #define USER_SS      0x20
+
+#define PATH_MAX 4096
+#define MAX_OPEN_FLAGS 0x10000
 
 extern void syscall_entry(void);
 
@@ -59,10 +65,76 @@ static int64_t sys_write(int fd, uint64_t buf, uint64_t len) {
     return (int64_t)len;
 }
 
+static int copy_user_string(uint64_t user_ptr, char *kernel_buf,
+                             uint64_t max_len) {
+    if (!kernel_buf || max_len == 0) return -1;
+    if (user_ptr == 0) return -1;
+    if (user_ptr >= USER_SPACE_MAX) return -1;
+
+    uint64_t current_page = user_ptr & ~0xFFFULL;
+    if (!vmm_is_user_accessible(current_page)) return -1;
+
+    const char *u = (const char *)user_ptr;
+
+    for (uint64_t i = 0; i < max_len - 1; i++) {
+        uint64_t addr = user_ptr + i;
+        uint64_t page = addr & ~0xFFFULL;
+
+        if (page != current_page) {
+            if (!vmm_is_user_accessible(page)) return -1;
+            current_page = page;
+        }
+
+        char c = u[i];
+        kernel_buf[i] = c;
+        if (c == 0) return (int)i;
+    }
+    return -1;
+}
+
+static int64_t sys_open(uint64_t path_user, uint32_t flags) {
+    if (path_user == 0) return -1;
+    if (flags & ~(uint32_t)MAX_OPEN_FLAGS) return -1;
+
+    char path[PATH_MAX];
+    int len = copy_user_string(path_user, path, PATH_MAX);
+    if (len < 0) {
+        kprintf("  [sys_open] invalid user path\n");
+        return -1;
+    }
+
+    struct process *p = process_current();
+    if (!p) return -1;
+
+    struct file *f = vfs_open(path, flags);
+    if (!f) {
+        kprintf("  [sys_open] '%s' not found\n", path);
+        return -1;
+    }
+
+    int fd = fd_alloc(&p->fds, f);
+    if (fd < 0) {
+        vfs_close(f);
+        return -1;
+    }
+
+    return fd;
+}
+
+static int64_t sys_close(int fd) {
+    struct process *p = process_current();
+    if (!p) return -1;
+    return fd_close(&p->fds, fd);
+}
+
 void syscall_handler(uint64_t sysno, struct registers *regs) {
     switch (sysno) {
-    case SYS_exit:
+        case SYS_exit: {
+        struct process *p = process_current();
+        if (p) p->exit_status = (uint32_t)regs->rdi;
         userspace_exit_to_kernel();
+        break;
+    }
     case SYS_process_exit:
         process_exit((uint32_t)regs->rdi);
         break;
@@ -97,6 +169,16 @@ void syscall_handler(uint64_t sysno, struct registers *regs) {
     case SYS_yield: {
         schedule();
         regs->rax = 0;
+        break;
+    }
+    case SYS_open: {
+        int64_t ret = sys_open(regs->rdi, (uint32_t)regs->rsi);
+        regs->rax = (uint64_t)ret;
+        break;
+    }
+    case SYS_close: {
+        int64_t ret = sys_close((int)regs->rdi);
+        regs->rax = (uint64_t)ret;
         break;
     }
     default:

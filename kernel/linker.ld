@@ -35,5 +35,12 @@ SECTIONS
         _user_program_end = .;
     }
 
+        .user_program_file : ALIGN(4096)
+    {
+        _user_file_program_start = .;
+        *(.user_program_file)
+        _user_file_program_end = .;
+    }
+
     kernel_end = .;
 }

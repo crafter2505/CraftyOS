@@ -7,6 +7,7 @@
 #include "buddy.h"
 #include "pmm.h"
 #include "vmm.h"
+#include "fd.h"
 
 static pid_t next_pid = 1;
 static struct process *process_list = 0;
@@ -34,6 +35,7 @@ void process_init_subsystem(void) {
     kproc->next = process_list;
     process_list = kproc;
     kproc->total_ticks = 0;
+    fd_table_init(&kproc->fds);
     current_process = kproc;
     struct thread *boot_thread = thread_current();
     if (boot_thread) boot_thread->process = kproc;
@@ -63,6 +65,8 @@ struct process *process_create(const char *name, void (*entry)(void *), void *ar
     proc->next = process_list;
     process_list = proc;
     proc->total_ticks = 0;
+
+    fd_table_init(&proc->fds);
 
     struct thread *t = thread_create(name, entry, arg);
     if (!t) {
@@ -95,6 +99,8 @@ void process_exit(uint32_t status) {
 
     kprintf("  PROCESS: '%s' (pid=%d) exiting with status %d\n",
             p->name, (uint64_t)p->pid, (uint64_t)status);
+
+    fd_close_all(&p->fds);
 
     if (p->waiting_parent_thread) {
         sched_wake(p->waiting_parent_thread);

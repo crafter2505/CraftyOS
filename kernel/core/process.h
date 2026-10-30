@@ -1,6 +1,7 @@
 #ifndef PROCESS_H
 #define PROCESS_H
 #include "types.h"
+#include "fd.h"
 
 typedef uint64_t pid_t;
 #define PROCESS_NAME_LEN 16
@@ -16,6 +17,7 @@ struct process {
     uint32_t exit_called;
     struct thread *waiting_parent_thread;
     struct thread *threads;
+    struct fd_table fds;
     struct process *parent;
     struct process *next;
     uint64_t total_ticks;

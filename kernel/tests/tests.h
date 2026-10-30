@@ -22,6 +22,7 @@ void test_process_lifecycle(void);
 void test_ahci(void);
 void test_vfs(void);
 void test_fat32(void);
+void test_file_syscalls(void);
 
 void run_all_tests(void);
 

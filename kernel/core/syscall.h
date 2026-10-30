@@ -14,6 +14,10 @@ void syscall_handler(uint64_t sysno, struct registers *regs);
 #define SYS_getppid       4
 #define SYS_wait          5
 #define SYS_process_exit  6
+#define SYS_open          7
+#define SYS_close         8
+#define SYS_read          9
+#define SYS_lseek         10
 
 void syscall_dump_msrs(void);
 

@@ -48,7 +48,7 @@ void _start(struct boot_info *boot_info) {
     terminal_clear();
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("craftyOS v0.16.1");
+    kprintf("craftyOS v0.16.4");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     if (boot_info) {
         kprintf(" (UEFI boot)\n");

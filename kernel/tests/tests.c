@@ -24,6 +24,7 @@ void run_all_tests(void) {
     test_ahci();
     test_vfs();
     test_fat32();
+    test_file_syscalls();
 
     terminal_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
     kprintf("\n=== all tests completed ===\n\n");

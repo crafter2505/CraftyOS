@@ -192,7 +192,8 @@ int userspace_run_program(const void *prog_start, uint64_t prog_size) {
 
     kprintf("  [user] returned from ring 3\n");
 
-    return 0;
+    struct process *p = process_current();
+    return p ? (int)p->exit_status : -1;
 }
 
 int userspace_run_embedded(void) {
