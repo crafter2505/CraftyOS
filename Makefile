@@ -1,7 +1,7 @@
 ASM      := nasm
 ASMFLAGS := -f bin
 CC       := gcc
-CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -Ikernel -Ikernel/mm -Ikernel/core -Ikernel/drivers -Ikernel/lib -Ikernel/arch -Ikernel/fs -c
+CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -Ikernel -Ikernel/mm -Ikernel/core -Ikernel/drivers -Ikernel/lib -Ikernel/arch -Ikernel/fs -Ikernel/shell -c
 LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 
@@ -101,22 +101,37 @@ run: $(IMG)
 		-drive format=raw,file=$(IMG) \
 		-serial file:$(BIOS_SERIAL_LOG)
 
+run-uefi: $(UEFI_IMG) $(OVMF_VARS_COPY)
+	qemu-system-x86_64 \
+		-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
+		-drive if=pflash,format=raw,file=$(OVMF_VARS_COPY) \
+		-drive format=raw,file=$(UEFI_IMG),if=none,id=disk0 \
+		-device ahci,id=ahci \
+		-device ide-hd,drive=disk0,bus=ahci.0 \
+		-vga std \
+		-display gtk,gl=off \
+		-serial file:$(UEFI_SERIAL_LOG)
+	@echo "--- $(UEFI_SERIAL_LOG) ---"
+	@tail -40 $(UEFI_SERIAL_LOG)
+
 runlog: $(IMG)
 	qemu-system-x86_64 \
 		-drive format=raw,file=$(IMG) \
 		-serial file:$(BIOS_SERIAL_LOG) \
 		-d int,cpu_reset -D $(BIOS_LOG)
 
-run-uefi: $(UEFI_IMG) $(OVMF_VARS_COPY)
+runlog-uefi: $(UEFI_IMG) $(OVMF_VARS_COPY)
 	qemu-system-x86_64 \
-	    -drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
-	    -drive if=pflash,format=raw,file=$(OVMF_VARS_COPY) \
-	    -drive format=raw,file=$(UEFI_IMG),if=none,id=disk0 \
-	    -device ahci,id=ahci \
-	    -device ide-hd,drive=disk0,bus=ahci.0 \
-	    -device VGA \
-	    -display gtk,gl=off \
-	    -serial file:$(UEFI_SERIAL_LOG)
+		-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
+		-drive if=pflash,format=raw,file=$(OVMF_VARS_COPY) \
+		-drive format=raw,file=$(UEFI_IMG),if=none,id=disk0 \
+		-device ahci,id=ahci \
+		-device ide-hd,drive=disk0,bus=ahci.0 \
+		-vga std \
+		-display gtk,gl=off \
+		-serial file:$(UEFI_SERIAL_LOG) \
+		-d int,cpu_reset -D $(UEFI_LOG)
+	@echo "--- $(UEFI_SERIAL_LOG) ---"
 	@tail -40 $(UEFI_SERIAL_LOG)
 
 remake:

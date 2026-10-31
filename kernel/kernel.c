@@ -28,6 +28,8 @@
 #include "syscall.h"
 #include "percpu.h"
 
+#include "shell.h"
+
 #include "tests/tests.h"
 
 static void print_ok(const char *msg) {
@@ -64,7 +66,7 @@ void _start(struct boot_info *boot_info) {
     terminal_clear();
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("craftyOS v0.17.0");
+    kprintf("craftyOS v0.18.0");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     if (boot_info) {
         kprintf(" (UEFI boot)\n");
@@ -152,11 +154,17 @@ void _start(struct boot_info *boot_info) {
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     run_all_tests();
 
-    terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("\ncraftyOS> ");
+    /* Hand off to the shell. From here, the shell thread is the main
+     * consumer of keyboard input and the primary interface. */
+    kprintf("\n");
+    if (shell_start() != 0) {
+        kprintf("Failed to start shell. Halting.\n");
+        for (;;) __asm__ volatile ("cli; hlt");
+    }
 
+    /* Boot thread becomes idle. The scheduler will run the shell
+     * when input is available. */
     for (;;) {
-        (void)line_get();
         __asm__ volatile ("hlt");
     }
 }

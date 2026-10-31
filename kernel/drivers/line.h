@@ -5,6 +5,6 @@
 
 void line_init(void);
 void line_putchar(char c);
-const char *line_get(void);
+int line_readline(char *out, int max);
 
 #endif
