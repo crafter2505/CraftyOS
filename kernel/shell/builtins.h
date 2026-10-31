@@ -12,5 +12,14 @@ int cmd_pwd  (int argc, char **argv);
 int cmd_cd   (int argc, char **argv);
 int cmd_ls   (int argc, char **argv);
 int cmd_cat  (int argc, char **argv);
+int cmd_uptime  (int argc, char **argv);
+int cmd_meminfo (int argc, char **argv);
+int cmd_ps      (int argc, char **argv);
+int cmd_buddy   (int argc, char **argv);
+int cmd_slab    (int argc, char **argv);
+int cmd_sched   (int argc, char **argv);
+int cmd_pgtbl   (int argc, char **argv);
+int cmd_dump    (int argc, char **argv);
+int cmd_reboot  (int argc, char **argv);
 
 #endif

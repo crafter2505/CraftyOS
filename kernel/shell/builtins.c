@@ -3,6 +3,14 @@
 #include "terminal.h"
 #include "path.h"
 #include "vfs.h"
+#include "timer.h"
+#include "buddy.h"
+#include "slab.h"
+#include "sched.h"
+#include "process.h"
+#include "pmm.h"
+#include "vmm.h"
+#include "io.h"
 
 const struct shell_cmd builtins_table[] = {
     { "help",  cmd_help,  "list available commands" },
@@ -12,6 +20,15 @@ const struct shell_cmd builtins_table[] = {
     { "cd",    cmd_cd,    "change directory" },
     { "ls",    cmd_ls,    "list directory contents" },
     { "cat",   cmd_cat,   "print file contents" },
+    { "uptime",  cmd_uptime,  "time since boot" },
+    { "meminfo", cmd_meminfo, "memory summary" },
+    { "ps",      cmd_ps,      "list processes" },
+    { "buddy",   cmd_buddy,   "buddy allocator dump" },
+    { "slab",    cmd_slab,    "slab allocator dump" },
+    { "sched",   cmd_sched,   "scheduler state" },
+    { "pgtbl",   cmd_pgtbl,   "walk page tables for a virtual addr" },
+    { "dump",    cmd_dump,    "hex dump kernel memory" },
+    { "reboot",  cmd_reboot,  "restart the machine" },
     { 0, 0, 0 }
 };
 
@@ -158,5 +175,184 @@ int cmd_cat(int argc, char **argv) {
     }
 
     vfs_close(f);
+    return 0;
+}
+
+int cmd_uptime(int argc, char **argv) {
+    (void)argc; (void)argv;
+    uint64_t ticks = timer_get_ticks();
+    uint64_t secs = ticks / 100;
+    uint64_t frac = (ticks % 100) * 100 / 100;
+    kprintf("up %ds (%d ticks)\n", secs, ticks);
+    return 0;
+};
+
+int cmd_meminfo(int argc, char **argv) {
+    (void)argc; (void)argv;
+
+    uint64_t total = pmm_get_total_pages();
+    uint64_t free  = pmm_get_free_pages();
+    uint64_t used  = total - free;
+
+    kprintf("=== memory ===\n");
+    kprintf("pmm:   %d total pages (%d MB), %d free, %d used\n",
+            total, total * 4 / 1024, free, used);
+
+    kprintf("\n-- buddy --\n");
+    buddy_dump_stats();
+
+    kprintf("\n-- slab --\n");
+    slab_dump_stats();
+
+    return 0;
+}
+
+int cmd_ps(int argc, char **argv) {
+    (void)argc; (void)argv;
+
+    struct process *cur = process_current();
+    if (!cur) {
+        kprintf("ps: no current process\n");
+        return 1;
+    }
+    kprintf("  PID  NAME\n");
+    kprintf("  %d    %s\n", (uint64_t)cur->pid, cur->name);
+    return 0;
+}
+
+int cmd_buddy(int argc, char **argv) {
+    (void)argc; (void)argv;
+    buddy_dump_stats();
+    return 0;
+}
+
+int cmd_slab(int argc, char **argv) {
+    (void)argc; (void)argv;
+    slab_dump_stats();
+    return 0;
+}
+
+int cmd_sched(int argc, char **argv) {
+    (void)argc; (void)argv;
+    sched_dump();
+    return 0;
+}
+
+int cmd_pgtbl(int argc, char **argv) {
+    if (argc < 2) {
+        kprintf("usage: pgtbl <hex-addr>\n");
+        return 1;
+    }
+
+    uint64_t virt = 0;
+    const char *s = argv[1];
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) s += 2;
+    while (*s) {
+        uint64_t digit;
+        if (*s >= '0' && *s <= '9') digit = *s - '0';
+        else if (*s >= 'a' && *s <= 'f') digit = *s - 'a' + 10;
+        else if (*s >= 'A' && *s <= 'F') digit = *s - 'A' + 10;
+        else { kprintf("pgtbl: invalid hex '%s'\n", argv[1]); return 1; }
+        virt = (virt << 4) | digit;
+        s++;
+    }
+
+    uint64_t phys = vmm_translate(virt);
+    if (phys == 0) {
+        kprintf("pgtbl: 0x%x not mapped\n", virt);
+        return 1;
+    }
+    kprintf("pgtbl: 0x%x -> phys 0x%x\n", virt, phys);
+    return 0;
+}
+
+
+static void print_hex_padded(uint64_t value, int digits) {
+    const char *hex = "0123456789abcdef";
+    for (int i = digits - 1; i >= 0; i--) {
+        kprintf("%c", hex[(value >> (i * 4)) & 0xF]);
+    }
+}
+
+int cmd_dump(int argc, char **argv) {
+    if (argc < 2) {
+        kprintf("usage: dump <hex-addr> [bytes]\n");
+        return 1;
+    }
+
+    uint64_t addr = 0;
+    const char *s = argv[1];
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) s += 2;
+    if (!*s) {
+        kprintf("dump: empty address\n");
+        return 1;
+    }
+    while (*s) {
+        uint64_t digit;
+        if (*s >= '0' && *s <= '9') digit = *s - '0';
+        else if (*s >= 'a' && *s <= 'f') digit = *s - 'a' + 10;
+        else if (*s >= 'A' && *s <= 'F') digit = *s - 'A' + 10;
+        else { kprintf("dump: invalid hex '%s'\n", argv[1]); return 1; }
+        addr = (addr << 4) | digit;
+        s++;
+    }
+
+    uint64_t count = 64;
+    if (argc >= 3) {
+        count = 0;
+        const char *c = argv[2];
+        while (*c >= '0' && *c <= '9') { count = count * 10 + (*c - '0'); c++; }
+        if (count == 0) count = 64;
+        if (count > 1024) count = 1024;
+    }
+
+    const uint8_t *p = (const uint8_t *)addr;
+    for (uint64_t off = 0; off < count; off += 16) {
+        print_hex_padded(addr + off, 8);
+        kprintf("  ");
+        for (uint64_t i = 0; i < 16; i++) {
+            if (off + i < count) {
+                print_hex_padded(p[off + i], 2);
+                kprintf(" ");
+            } else {
+                kprintf("   ");
+            }
+            if (i == 7) kprintf(" ");
+        }
+        kprintf(" |");
+        for (uint64_t i = 0; i < 16 && off + i < count; i++) {
+            uint8_t ch = p[off + i];
+            kprintf("%c", (ch >= 32 && ch < 127) ? (char)ch : '.');
+        }
+        kprintf("|\n");
+    }
+    return 0;
+}
+
+
+int cmd_reboot(int argc, char **argv) {
+    (void)argc; (void)argv;
+
+    kprintf("rebooting...\n");
+
+    for (int i = 0; i < 100000 && (inb(0x64) & 0x01); i++) {
+        (void)inb(0x60);
+    }
+
+    __asm__ volatile ("cli");
+
+    outb(0x64, 0xFE);
+
+    for (volatile int i = 0; i < 1000000; i++);
+
+
+    struct __attribute__((packed)) {
+        uint16_t limit;
+        uint64_t base;
+    } null_idt = { 0, 0 };
+    __asm__ volatile ("lidt %0" : : "m"(null_idt));
+    __asm__ volatile ("int $0x03");
+
+    for (;;) __asm__ volatile ("hlt");
     return 0;
 }
