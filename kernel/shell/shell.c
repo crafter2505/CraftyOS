@@ -38,7 +38,7 @@ void shell_set_cwd(const char *path) {
 
 static void print_prompt(void) {
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("craftyOS> ");
+    kprintf("craftyOS# ");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
 }
 
