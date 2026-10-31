@@ -37,8 +37,22 @@ void shell_set_cwd(const char *path) {
 }
 
 static void print_prompt(void) {
+    const char *cwd = shell_get_cwd();
+    const char *shown = cwd;
+    int len = 0;
+    while (cwd[len]) len++;
+    if (len > 24) {
+        int last_slash = 0;
+        for (int i = 0; i < len; i++) {
+            if(cwd[i] == '/') last_slash = i;
+        }
+        if (last_slash > 0 && last_slash < len -1) {
+            shown = cwd + last_slash + 1;
+        }
+    }
+
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("craftyOS# ");
+    kprintf("CraftyOS:%s# ", shown);
     terminal_set_color(VGA_WHITE, VGA_BLACK);
 }
 

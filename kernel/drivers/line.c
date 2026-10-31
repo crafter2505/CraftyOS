@@ -3,6 +3,7 @@
 #include "kprintf.h"
 #include "sched.h"
 #include "thread.h"
+#include "serial.h"
 
 static char line_buffer[LINE_MAX];
 static int  line_len = 0;
@@ -27,6 +28,8 @@ void line_putchar(char c) {
         line_buffer[line_len] = 0;
         line_ready = 1;
         terminal_putchar('\n');
+        serial_putchar('\r');
+        serial_putchar('\n');
 
         if (waiting_reader) {
             sched_wake(waiting_reader);
@@ -40,6 +43,9 @@ void line_putchar(char c) {
             terminal_putchar('\b');
             terminal_putchar(' ');
             terminal_putchar('\b');
+            serial_putchar('\b');
+            serial_putchar(' ');
+            serial_putchar('\b');
         }
         return;
     }
@@ -47,6 +53,7 @@ void line_putchar(char c) {
     if (c >= 32 && c < 127 && line_len < LINE_MAX - 1) {
         line_buffer[line_len++] = c;
         terminal_putchar(c);
+        serial_putchar(c);
     }
 }
 
