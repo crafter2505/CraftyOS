@@ -14,6 +14,17 @@ static struct process *process_list = 0;
 static struct process *current_process = 0;
 static uint64_t kernel_pml4_phys;
 
+static void process_unlink_and_free(struct process *p) {
+    if (process_list == p) {
+        process_list = p->next;
+    } else {
+        struct process *prev = process_list;
+        while (prev && prev->next != p) prev = prev->next;
+        if (prev) prev->next = p->next;
+    }
+    kfree(p);
+}
+
 void process_init_subsystem(void) {
     struct process *kproc = (struct process *)kmalloc(sizeof(struct process));
     if (!kproc) {
@@ -109,36 +120,6 @@ void process_exit(uint32_t status) {
     for (;;) __asm__ volatile ("cli; hlt");
 }
 
-int process_wait(pid_t pid, uint32_t *status_out) {
-    struct process *p = process_list;
-    while (p) {
-        if (p->pid == pid && p->parent == process_current()) {
-            break;
-        }
-        p = p->next;
-    }
-    if (!p) return -1;
-
-    if (p->exit_called) {
-        if (status_out) *status_out = p->exit_status;
-        process_free_address_space(p->pml4_phys);
-        return 0;
-    }
-
-    struct thread *self = thread_current();
-    if (!self) return -1;
-    p->waiting_parent_thread = self;
-    self->state = THREAD_BLOCKED;
-    schedule();
-
-    if (p->exit_called) {
-        if (status_out) *status_out = p->exit_status;
-        process_free_address_space(p->pml4_phys);
-        return 0;
-    }
-    return -1;
-}
-
 void process_free_address_space(uint64_t pml4_phys) {
     if (!pml4_phys || pml4_phys == kernel_pml4_phys) return;
 
@@ -190,6 +171,39 @@ void process_free_address_space(uint64_t pml4_phys) {
         pmm_free_page((void *)pdpt);
     }
     pmm_free_page((void *)pml4_phys);
+}
+
+int process_wait(pid_t pid, uint32_t *status_out) {
+    struct process *p = process_list;
+    while (p) {
+        if (p->pid == pid && p->parent == process_current()) {
+            break;
+        }
+        p = p->next;
+    }
+    if (!p) return -1;
+
+    struct thread *self = thread_current();
+    if (!self) return -1;
+
+    for (;;) {
+        if (p->exit_called) {
+            if (status_out) *status_out = p->exit_status;
+            process_free_address_space(p->pml4_phys);
+            process_unlink_and_free(p);
+            return 0;
+        }
+
+        p->waiting_parent_thread = self;
+        self->state = THREAD_BLOCKED;
+        schedule();
+    }
+}
+
+uint64_t process_count(void) {
+    uint64_t n = 0;
+    for (struct process *p = process_list; p; p = p->next) n++;
+    return n;
 }
 
 void process_dump_all(void) {

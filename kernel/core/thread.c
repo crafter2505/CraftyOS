@@ -112,8 +112,13 @@ struct thread *thread_create(const char *name, void (*entry)(void *), void *arg)
     t->ctx.rip    = (uint64_t)thread_trampoline;
     t->ctx.rflags = 0x202;
 
-
     total_threads_created++;
+
+    /* Enqueue the new thread so schedule() can find it. Without this,
+     * a freshly created thread sits in THREAD_READY but is invisible
+     * to find_next_runnable(), which only walks the circular next-
+     * linked list rooted at the current thread. */
+    sched_add(t);
 
     kprintf("  THREAD: created '%s' id=%d stack=0x%x\n",
             t->name, (uint64_t)t->id, (uint64_t)stack);

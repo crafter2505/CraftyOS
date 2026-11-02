@@ -17,7 +17,8 @@ void sched_init(void) {
     }
 
     idle_thread->process = process_current();
-    sched_add(idle_thread);
+    /* thread_create() now sched_add()s the new thread, so idle is
+     * already on the run queue by the time we get here. */
     kprintf(" SCHED: initialized (idle thread=%d)\n", (uint64_t)idle_thread->id);
 }
 
@@ -121,14 +122,6 @@ void sched_block(void) {
     if (!cur) return;
     cur->state = THREAD_BLOCKED;
     schedule();
-}
-
-void shced_wake(struct thread *t) {
-    if (!t) return;
-    if (t->state == THREAD_BLOCKED || t-> state == THREAD_SLEEPING) {
-        t->state = THREAD_READY;
-        t->wake_at_tick = 0;
-    }
 }
 
 void sched_sleep(uint64_t ticks) {

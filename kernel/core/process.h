@@ -30,6 +30,7 @@ void process_exit(uint32_t status) __attribute__((noreturn));
 int process_wait(pid_t pid, uint32_t *status_out);
 void process_free_address_space(uint64_t pml4_phys);
 void process_dump_all(void);
+uint64_t process_count(void);
 
 
 #endif
