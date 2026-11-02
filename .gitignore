@@ -18,4 +18,5 @@ bios-serial.log
 *~
 .DS_Store
 .vscode/
-.idea/
+.idea/bootloader/uefi/BOOTX64.EFI
+bootloader/uefi/main.obj
