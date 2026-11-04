@@ -20,3 +20,5 @@ bios-serial.log
 .vscode/
 .idea/bootloader/uefi/BOOTX64.EFI
 bootloader/uefi/main.obj
+
+*.d

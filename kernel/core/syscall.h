@@ -2,10 +2,10 @@
 #define SYSCALL_H
 
 #include "types.h"
-#include "isr.h"
+#include "syscall_regs.h"
 
 void syscall_init(void);
-void syscall_handler(uint64_t sysno, struct registers *regs);
+void syscall_handler(uint64_t sysno, struct syscall_regs *regs);
 
 #define SYS_exit          0
 #define SYS_write         1
@@ -18,6 +18,7 @@ void syscall_handler(uint64_t sysno, struct registers *regs);
 #define SYS_close         8
 #define SYS_read          9
 #define SYS_lseek         10
+#define SYS_fork          11
 
 void syscall_dump_msrs(void);
 

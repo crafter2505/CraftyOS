@@ -8,11 +8,27 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "fd.h"
+#include "userspace.h"
+
+#include <stddef.h>
+
+extern void fork_enter_user_asm(struct fork_frame *frame) __attribute__((noreturn));
+
+_Static_assert(offsetof(struct fork_frame, rip)  == 120, "fork_frame.rip offset changed");
+_Static_assert(offsetof(struct fork_frame, rsp)  == 136, "fork_frame.rsp offset changed");
+_Static_assert(sizeof(struct fork_frame) == 144, "fork_frame size changed");
 
 static pid_t next_pid = 1;
 static struct process *process_list = 0;
 static struct process *current_process = 0;
 static uint64_t kernel_pml4_phys;
+
+__attribute__((noreturn))
+static void fork_enter_user(struct fork_frame *frame, uint64_t pml4_phys) {
+    vmm_switch_address_space(pml4_phys);
+    fork_enter_user_asm(frame);
+    __builtin_unreachable();
+}
 
 static void process_unlink_and_free(struct process *p) {
     if (process_list == p) {
@@ -214,4 +230,129 @@ void process_dump_all(void) {
         kprintf("    pid=%d name='%s' pml4=0x%x\n",
                 (uint64_t)p->pid, p->name, p->pml4_phys);
     }
+}
+
+struct process *process_fork(struct syscall_regs *regs) {
+    if (!regs) return 0;
+
+    struct process *parent = process_current();
+    if (!parent) return 0;
+
+    struct process *child = (struct process *)kmalloc(sizeof(struct process));
+    if (!child) return 0;
+    uint8_t *zero = (uint8_t *)child;
+    for (unsigned long i = 0; i < sizeof(struct process); i++) zero[i] = 0;
+
+    child->pid = next_pid++;
+    int i = 0;
+    while (parent->name[i] && i < PROCESS_NAME_LEN - 1) {
+        child->name[i] = parent->name[i];
+        i++;
+    }
+    child->name[i] = 0;
+
+    child->state = 0;
+    child->parent = parent;
+    child->next = process_list;
+    process_list = child;
+    child->total_ticks = 0;
+
+    fd_table_init(&child->fds);
+
+    child->pml4_phys = vmm_create_address_space();
+    if (!child->pml4_phys) {
+        process_unlink_and_free(child);
+        return 0;
+    }
+
+#define FORK_MAX_USER_PAGES 16
+    struct { uint64_t virt; uint64_t parent_phys; uint64_t child_phys; }
+        pages[FORK_MAX_USER_PAGES];
+    int npages = 0;
+
+    for (uint64_t va = USER_CODE_BASE; va < USER_STACK_TOP; va += VMM_PAGE_SIZE) {
+        uint64_t phys = vmm_translate(va);
+        if (phys == 0) continue;
+        if (npages >= FORK_MAX_USER_PAGES) break;
+        pages[npages].virt        = va;
+        pages[npages].parent_phys = phys & 0x000FFFFFFFFFF000ULL;
+        pages[npages].child_phys  = 0;
+        npages++;
+    }
+
+    if (npages == 0) {
+        kprintf("  FORK: parent has no user pages\n");
+        process_free_address_space(child->pml4_phys);
+        process_unlink_and_free(child);
+        return 0;
+    }
+
+    for (int k = 0; k < npages; k++) {
+        uint64_t new_phys = (uint64_t)pmm_alloc_page();
+        if (!new_phys) {
+            kprintf("  FORK: page alloc failed\n");
+            for (int j = 0; j < k; j++) pmm_free_page((void *)pages[j].child_phys);
+            process_free_address_space(child->pml4_phys);
+            process_unlink_and_free(child);
+            return 0;
+        }
+        pages[k].child_phys = new_phys;
+
+        uint8_t *src = (uint8_t *)(DIRECT_MAP_BASE + pages[k].parent_phys);
+        uint8_t *dst = (uint8_t *)(DIRECT_MAP_BASE + new_phys);
+        for (int b = 0; b < VMM_PAGE_SIZE; b++) dst[b] = src[b];
+    }
+
+    uint64_t saved_pml4 = vmm_get_current_pml4();
+    vmm_switch_address_space(child->pml4_phys);
+    for (int k = 0; k < npages; k++) {
+        vmm_map_user(pages[k].virt, pages[k].child_phys, VMM_WRITABLE);
+    }
+    vmm_switch_address_space(saved_pml4);
+
+    struct thread *t = thread_create(child->name, 0, 0);
+    if (!t) {
+        process_free_address_space(child->pml4_phys);
+        process_unlink_and_free(child);
+        return 0;
+    }
+    t->process  = child;
+    child->threads = t;
+
+    uint8_t *stack_top = (uint8_t *)t->stack_base + THREAD_STACK_SIZE;
+    struct fork_frame *frame = (struct fork_frame *)
+        (stack_top - sizeof(struct fork_frame) - 16);
+
+    frame->rax    = 0;
+    frame->rbx    = regs->rbx;
+    frame->rcx    = regs->rcx;
+    frame->rdx    = regs->rdx;
+    frame->rsi    = regs->rsi;
+    frame->rdi    = regs->rdi;
+    frame->rbp    = regs->rbp;
+    frame->r8     = regs->r8;
+    frame->r9     = regs->r9;
+    frame->r10    = regs->r10;
+    frame->r11    = regs->r11;
+    frame->r12    = regs->r12;
+    frame->r13    = regs->r13;
+    frame->r14    = regs->r14;
+    frame->r15    = regs->r15;
+    frame->rip    = regs->rip;
+    frame->rflags = regs->rflags;
+    frame->rsp    = regs->rsp;
+
+    t->ctx.rip    = (uint64_t)fork_enter_user;
+    t->ctx.rsp    = (uint64_t)frame - 8;
+    t->ctx.rdi    = (uint64_t)frame;
+    t->ctx.rsi    = child->pml4_phys;
+    t->ctx.rflags = 0x202;
+
+    kprintf("  FORK: pid=%d -> child pid=%d (pml4=0x%x, pages=%d) "
+            "rip=0x%x rsp=0x%x\n",
+            (uint64_t)parent->pid, (uint64_t)child->pid,
+            child->pml4_phys, (uint64_t)npages,
+            regs->rip, regs->rsp);
+
+    return child;
 }

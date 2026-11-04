@@ -11,6 +11,8 @@
 #include "kmalloc.h"
 #include "vfs.h"
 
+#include <stddef.h>
+
 #define IA32_EFER    0xC0000080
 #define IA32_STAR    0xC0000081
 #define IA32_LSTAR   0xC0000082
@@ -25,6 +27,11 @@
 
 extern void syscall_entry(void);
 
+_Static_assert(offsetof(struct syscall_regs, rax)    == 112, "syscall_regs.rax");
+_Static_assert(offsetof(struct syscall_regs, rip)    == 120, "syscall_regs.rip");
+_Static_assert(offsetof(struct syscall_regs, rflags) == 128, "syscall_regs.rflags");
+_Static_assert(offsetof(struct syscall_regs, rsp)    == 136, "syscall_regs.rsp");
+_Static_assert(sizeof(struct syscall_regs)           == 144, "syscall_regs.size");
 
 void syscall_init(void) {
     uint64_t star = ((uint64_t)(USER_SS - 8) << 48)
@@ -54,8 +61,8 @@ static int64_t sys_write(int fd, uint64_t buf, uint64_t len) {
         kprintf("  [sys_write] unsupported fd=%d\n", (int64_t)fd);
     }
     if (!vmm_is_user_range(buf, len)) {
-        kprintf("  [sys)write] invalid user range: buf0x%x len=%d\n",
-        buf, len);
+        kprintf("  [sys_write] invalid user range: buf=0x%x len=%d\n",
+                buf, len);
         return -1;
     }
     const char *user_buf = (const char *)buf;
@@ -66,7 +73,7 @@ static int64_t sys_write(int fd, uint64_t buf, uint64_t len) {
 }
 
 static int copy_user_string(uint64_t user_ptr, char *kernel_buf,
-                             uint64_t max_len) {
+                            uint64_t max_len) {
     if (!kernel_buf || max_len == 0) return -1;
     if (user_ptr == 0) return -1;
     if (user_ptr >= USER_SPACE_MAX) return -1;
@@ -93,7 +100,7 @@ static int copy_user_string(uint64_t user_ptr, char *kernel_buf,
 }
 
 static int copy_to_user(uint64_t user_ptr, const void *kernel_buf,
-                         uint64_t len) {
+                        uint64_t len) {
     if (!kernel_buf || len == 0) return -1;
     if (user_ptr == 0) return -1;
     if (user_ptr >= USER_SPACE_MAX) return -1;
@@ -191,12 +198,17 @@ static int64_t sys_lseek(int fd, int64_t offset, int whence) {
     return (int64_t)vfs_seek(f, (uint64_t)offset, whence);
 }
 
-void syscall_handler(uint64_t sysno, struct registers *regs) {
+void syscall_handler(uint64_t sysno, struct syscall_regs *regs) {
     switch (sysno) {
-        case SYS_exit: {
+    case SYS_exit: {
+        struct thread *t = thread_current();
         struct process *p = process_current();
         if (p) p->exit_status = (uint32_t)regs->rdi;
-        userspace_exit_to_kernel();
+        if (t && t->user_continuation.rip != 0) {
+            userspace_exit_to_kernel();
+        } else {
+            process_exit((uint32_t)regs->rdi);
+        }
         break;
     }
     case SYS_process_exit:
@@ -224,9 +236,7 @@ void syscall_handler(uint64_t sysno, struct registers *regs) {
         break;
     }
     case SYS_write: {
-        int64_t ret = sys_write((int)regs->rdi,
-                                regs->rsi,
-                                regs->rdx);
+        int64_t ret = sys_write((int)regs->rdi, regs->rsi, regs->rdx);
         regs->rax = (uint64_t)ret;
         break;
     }
@@ -253,6 +263,11 @@ void syscall_handler(uint64_t sysno, struct registers *regs) {
     case SYS_lseek: {
         int64_t ret = sys_lseek((int)regs->rdi, (int64_t)regs->rsi, (int)regs->rdx);
         regs->rax = (uint64_t)ret;
+        break;
+    }
+    case SYS_fork: {
+        struct process *child = process_fork(regs);
+        regs->rax = child ? (uint64_t)child->pid : (uint64_t)-1;
         break;
     }
     default:

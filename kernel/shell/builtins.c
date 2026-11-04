@@ -11,6 +11,7 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "io.h"
+#include "userspace.h"
 
 const struct shell_cmd builtins_table[] = {
     { "help",  cmd_help,  "list available commands" },
@@ -29,6 +30,7 @@ const struct shell_cmd builtins_table[] = {
     { "pgtbl",   cmd_pgtbl,   "walk page tables for a virtual addr" },
     { "dump",    cmd_dump,    "hex dump kernel memory" },
     { "reboot",  cmd_reboot,  "restart the machine" },
+    { "forktest", cmd_forktest, "test fork syscall" },
     { 0, 0, 0 }
 };
 
@@ -355,4 +357,14 @@ int cmd_reboot(int argc, char **argv) {
 
     for (;;) __asm__ volatile ("hlt");
     return 0;
+}
+
+extern uint8_t _user_fork_program_start[];
+extern uint8_t _user_fork_program_end[];
+
+int cmd_forktest(int argc, char **argv) {
+    (void)argc; (void)argv;
+    int rc = userspace_run_program(_user_fork_program_start, _user_fork_program_end - _user_fork_program_start);
+    kprintf("forktest: program exited %d\n", (uint64_t)rc);
+    return (rc == 0) ? 0 : 1;
 }

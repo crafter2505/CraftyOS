@@ -52,7 +52,9 @@ $(STAGE2_BIN): $(STAGE2) bootloader/gdt.asm | build
 
 build/kernel/%.o: kernel/%.c Makefile | build
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP $< -o $@
+
+-include $(KERNEL_OBJS:.o=.d)
 
 build/kernel/%.o: kernel/%.asm | build
 	mkdir -p $(dir $@)

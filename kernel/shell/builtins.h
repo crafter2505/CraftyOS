@@ -21,5 +21,6 @@ int cmd_sched   (int argc, char **argv);
 int cmd_pgtbl   (int argc, char **argv);
 int cmd_dump    (int argc, char **argv);
 int cmd_reboot  (int argc, char **argv);
+int cmd_forktest(int argc, char **argv);
 
 #endif
