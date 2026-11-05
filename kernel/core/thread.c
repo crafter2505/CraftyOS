@@ -62,6 +62,7 @@ void thread_trampoline(void) {
     sched_idle_loop();
     for (;;) __asm__ volatile ("cli; hlt");
 }
+
 void set_current_thread(struct thread *t) {
     current_thread = t;
 }
@@ -105,7 +106,6 @@ struct thread *thread_create(const char *name, void (*entry)(void *), void *arg)
     t->wake_at_tick = 0;
 
     uint64_t stack_top = (uint64_t)stack + THREAD_STACK_SIZE;
-
     stack_top &= ~0xFULL;
 
     t->ctx.rsp    = stack_top;
@@ -113,12 +113,6 @@ struct thread *thread_create(const char *name, void (*entry)(void *), void *arg)
     t->ctx.rflags = 0x202;
 
     total_threads_created++;
-
-    /* Enqueue the new thread so schedule() can find it. Without this,
-     * a freshly created thread sits in THREAD_READY but is invisible
-     * to find_next_runnable(), which only walks the circular next-
-     * linked list rooted at the current thread. */
-    sched_add(t);
 
     kprintf("  THREAD: created '%s' id=%d stack=0x%x\n",
             t->name, (uint64_t)t->id, (uint64_t)stack);

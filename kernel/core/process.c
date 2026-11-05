@@ -8,15 +8,23 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "fd.h"
+#include "vfs.h"
 #include "userspace.h"
+#include "elf.h"
 
 #include <stddef.h>
 
 extern void fork_enter_user_asm(struct fork_frame *frame) __attribute__((noreturn));
+extern void exec_enter_user_asm(struct exec_frame *frame) __attribute__((noreturn));
 
 _Static_assert(offsetof(struct fork_frame, rip)  == 120, "fork_frame.rip offset changed");
 _Static_assert(offsetof(struct fork_frame, rsp)  == 136, "fork_frame.rsp offset changed");
 _Static_assert(sizeof(struct fork_frame) == 144, "fork_frame size changed");
+
+_Static_assert(offsetof(struct exec_frame, rip)  == 120, "exec_frame.rip offset");
+_Static_assert(offsetof(struct exec_frame, rsp)  == 136, "exec_frame.rsp offset");
+_Static_assert(sizeof(struct exec_frame) == 144, "exec_frame size");
+
 
 static pid_t next_pid = 1;
 static struct process *process_list = 0;
@@ -102,6 +110,7 @@ struct process *process_create(const char *name, void (*entry)(void *), void *ar
     }
     t->process = proc;
     proc->threads = t;
+    sched_add(t);
 
     kprintf("  PROCESS: created '%s' pid=%d thread_id=%d\n",
             proc->name, (uint64_t)proc->pid, (uint64_t)t->id);
@@ -205,6 +214,8 @@ int process_wait(pid_t pid, uint32_t *status_out) {
     for (;;) {
         if (p->exit_called) {
             if (status_out) *status_out = p->exit_status;
+            kprintf("  WAIT-DBG: reaping p->pid=%d p->pml4=0x%x cur=0x%x\n",
+                    (int)p->pid, p->pml4_phys, vmm_get_current_pml4());
             process_free_address_space(p->pml4_phys);
             process_unlink_and_free(p);
             return 0;
@@ -348,6 +359,7 @@ struct process *process_fork(struct syscall_regs *regs) {
     t->ctx.rsi    = child->pml4_phys;
     t->ctx.rflags = 0x202;
 
+    sched_add(t);
     kprintf("  FORK: pid=%d -> child pid=%d (pml4=0x%x, pages=%d) "
             "rip=0x%x rsp=0x%x\n",
             (uint64_t)parent->pid, (uint64_t)child->pid,
@@ -355,4 +367,76 @@ struct process *process_fork(struct syscall_regs *regs) {
             regs->rip, regs->rsp);
 
     return child;
+}
+
+static void free_user_pages(struct process *p) {
+    kprintf("  FREE-DBG: p->pid=%d p->pml4=0x%x cur_before=0x%x\n",
+            (int)p->pid, p->pml4_phys, vmm_get_current_pml4());
+    uint64_t saved = vmm_get_current_pml4();
+    vmm_switch_address_space(p->pml4_phys);
+    for (uint64_t va = USER_CODE_BASE; va < USER_STACK_TOP; va += VMM_PAGE_SIZE) {
+        uint64_t phys = vmm_translate(va);
+        if (phys == 0) continue;
+        uint64_t page = phys & 0x000FFFFFFFFFF000ULL;
+        vmm_unmap(va);
+        pmm_free_page((void *)page);
+    }
+    vmm_switch_address_space(saved);
+}
+
+__attribute__((noreturn))
+void process_exec(const char *path) {
+    if (!path) process_exit(127);
+
+    struct file *f = vfs_open(path, 0);
+    if (!f) {
+        kprintf("  EXEC: '%s' not found\n", path);
+        process_exit(127);
+    }
+
+    struct process *p = process_current();
+    if (!p) {
+        vfs_close(f);
+        process_exit(127);
+    }
+
+    kprintf("  EXEC-DBG: path=%s p->pid=%d p->pml4=0x%x cur=0x%x\n",
+            path, (int)p->pid, p->pml4_phys, vmm_get_current_pml4());
+
+    free_user_pages(p);
+
+    kprintf("  EXEC-DBG: after free_user_pages, cur=0x%x\n",
+            vmm_get_current_pml4());
+
+    uint64_t entry = 0;
+    int rc = elf_load_user(f, &entry);
+    vfs_close(f);
+    if (rc != 0) {
+        kprintf("  EXEC: load failed\n");
+        process_exit(127);
+    }
+
+    uint64_t stack_base = USER_STACK_TOP - USER_STACK_SIZE;
+    uint64_t stack_pages = USER_STACK_SIZE / VMM_PAGE_SIZE;
+    for (uint64_t i = 0; i < stack_pages; i++) {
+        uint64_t phys = (uint64_t)pmm_alloc_page();
+        if (!phys) process_exit(127);
+        uint8_t *kva = (uint8_t *)(DIRECT_MAP_BASE + phys);
+        for (int b = 0; b < (int)VMM_PAGE_SIZE; b++) kva[b] = 0;
+        if (vmm_map_user(stack_base + i * VMM_PAGE_SIZE, phys, VMM_WRITABLE) != 0) {
+            pmm_free_page((void *)phys);
+            process_exit(127);
+        }
+    }
+
+    struct exec_frame frame;
+    for (size_t i = 0; i < sizeof(frame); i++) ((uint8_t *)&frame)[i] = 0;
+    frame.rip    = entry;
+    frame.rsp    = USER_STACK_TOP - 16;
+    frame.rflags = 0x202;
+
+    kprintf("  EXEC: '%s' -> entry=0x%x rsp=0x%x cur=0x%x\n",
+            path, entry, frame.rsp, vmm_get_current_pml4());
+    exec_enter_user_asm(&frame);
+    __builtin_unreachable();
 }

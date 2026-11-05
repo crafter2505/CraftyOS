@@ -26,9 +26,6 @@ void test_isolation(void) {
         return;
     }
 
-    sched_add(pa->threads);
-    sched_add(pb->threads);
-
     int spins = 0;
     while (spins < 500 &&
            (pa->threads->state != THREAD_TERMINATED ||

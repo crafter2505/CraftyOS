@@ -3,6 +3,7 @@
 #include "terminal.h"
 #include "thread.h"
 #include "sched.h"
+#include "vmm.h"
 
 uint64_t fault_read_cr2(void)
 {
@@ -110,7 +111,10 @@ void fault_report(uint64_t int_no, uint64_t err_code, struct registers *regs)
     }
 }
 
-void user_fault_handler(uint64_t int_no, uint64_t err_code, struct registers *regs){
+void user_fault_handler(uint64_t int_no, uint64_t err_code, struct registers *regs) {
+
+    kprintf("\n  FAULT-DBG: cr3=0x%x rip=0x%x rsp=0x%x\n",
+            fault_read_cr3(), regs->rip, regs->rsp);
 
     terminal_set_color(VGA_LIGHT_RED, VGA_BLACK);
     kprintf("\n[USER FAULT] ");

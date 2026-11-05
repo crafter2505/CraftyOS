@@ -33,6 +33,7 @@ uint64_t vmm_create_address_space(void);
 void vmm_destroy_address_space(uint64_t pml4_phys);
 void vmm_switch_address_space(uint64_t pml4_phys);
 uint64_t vmm_get_current_pml4(void);
+uint64_t vmm_get_kernel_pml4(void);
 
 void vmm_test(void);
 

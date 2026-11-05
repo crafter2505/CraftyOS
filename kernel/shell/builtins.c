@@ -31,6 +31,7 @@ const struct shell_cmd builtins_table[] = {
     { "dump",    cmd_dump,    "hex dump kernel memory" },
     { "reboot",  cmd_reboot,  "restart the machine" },
     { "forktest", cmd_forktest, "test fork syscall" },
+    { "exectest", cmd_exectest, "test fork+exec" },
     { 0, 0, 0 }
 };
 
@@ -366,5 +367,15 @@ int cmd_forktest(int argc, char **argv) {
     (void)argc; (void)argv;
     int rc = userspace_run_program(_user_fork_program_start, _user_fork_program_end - _user_fork_program_start);
     kprintf("forktest: program exited %d\n", (uint64_t)rc);
+    return (rc == 0) ? 0 : 1;
+}
+
+extern uint8_t _user_fork_exec_start[];
+extern uint8_t _user_fork_exec_end[];
+
+int cmd_exectest(int argc, char **argv) {
+    (void)argc; (void)argv;
+    int rc = userspace_run_program(_user_fork_exec_start, _user_fork_exec_end - _user_fork_exec_start);
+    kprintf("exectest: program exited %d\n", (uint64_t)rc);
     return (rc == 0) ? 0 : 1;
 }

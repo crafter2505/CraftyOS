@@ -105,7 +105,6 @@ int vmm_map(uint64_t virt, uint64_t phys, uint64_t flags) {
     return 0;
 }
 
-
 void vmm_unmap(uint64_t virt) {
     if ((virt & (VMM_PAGE_SIZE - 1)) != 0) return;
     uint64_t *entry = pt_walk(virt, 0, 0);
@@ -153,8 +152,6 @@ uint64_t vmm_alloc_page(uint64_t virt, uint64_t flags) {
     return virt;
 }
 
-
-
 void vmm_invlpg(uint64_t virt) {
     __asm__ volatile ("invlpg (%0)" : : "r"(virt) : "memory");
 }
@@ -193,7 +190,8 @@ int vmm_is_user_range(uint64_t ptr, uint64_t len) {
     if (ptr + len < ptr) return 0;
     if (ptr >= USER_SPACE_MAX) return 0;
     if (ptr + len > USER_SPACE_MAX) return 0;
-        uint64_t start_page = ptr & ~0xFFFULL;
+
+    uint64_t start_page = ptr & ~0xFFFULL;
     uint64_t end_page   = (ptr + len - 1) & ~0xFFFULL;
 
     for (uint64_t p = start_page; p <= end_page; p += 0x1000) {
@@ -205,27 +203,91 @@ int vmm_is_user_range(uint64_t ptr, uint64_t len) {
     return 1;
 }
 
+uint64_t vmm_get_kernel_pml4(void) {
+    return kernel_pml4_phys;
+}
+
+static int clone_page_table_level2(uint64_t *src_pdpt, uint64_t *dst_pdpt) {
+    for (int pdpt_idx = 0; pdpt_idx < 512; pdpt_idx++) {
+        uint64_t src_pdpt_entry = src_pdpt[pdpt_idx];
+        if (!(src_pdpt_entry & VMM_PRESENT)) continue;
+
+        if (src_pdpt_entry & VMM_HUGE) {
+            dst_pdpt[pdpt_idx] = src_pdpt_entry;
+            continue;
+        }
+
+        uint64_t dst_pd_phys = (uint64_t)pmm_alloc_page();
+        if (!dst_pd_phys) return -1;
+        uint64_t *dst_pd = phys_to_ptr(dst_pd_phys);
+        uint64_t *src_pd = phys_to_ptr(src_pdpt_entry & 0x000FFFFFFFFFF000ULL);
+        for (int i = 0; i < 512; i++) dst_pd[i] = 0;
+
+        for (int pd_idx = 0; pd_idx < 512; pd_idx++) {
+            uint64_t src_pd_entry = src_pd[pd_idx];
+            if (!(src_pd_entry & VMM_PRESENT)) continue;
+
+            if (src_pd_entry & VMM_HUGE) {
+                dst_pd[pd_idx] = src_pd_entry;
+                continue;
+            }
+
+            uint64_t dst_pt_phys = (uint64_t)pmm_alloc_page();
+            if (!dst_pt_phys) {
+                pmm_free_page((void *)dst_pd_phys);
+                return -1;
+            }
+            uint64_t *dst_pt = phys_to_ptr(dst_pt_phys);
+            uint64_t *src_pt = phys_to_ptr(src_pd_entry & 0x000FFFFFFFFFF000ULL);
+            for (int i = 0; i < 512; i++) {
+                dst_pt[i] = src_pt[i];
+            }
+            dst_pd[pd_idx] = dst_pt_phys | (src_pd_entry & 0xFFFULL);
+        }
+
+        dst_pdpt[pdpt_idx] = dst_pd_phys | (src_pdpt_entry & 0xFFFULL);
+    }
+    return 0;
+}
+
 uint64_t vmm_create_address_space(void) {
     uint64_t new_pml4_phys = (uint64_t)pmm_alloc_page();
     if (!new_pml4_phys) return 0;
     uint64_t *new_pml4 = (uint64_t *)(DIRECT_MAP_BASE + new_pml4_phys);
     uint64_t *kernel_pml4 = phys_to_ptr(kernel_pml4_phys);
+
     for (int i = 0; i < 512; i++) {
         new_pml4[i] = kernel_pml4[i];
     }
 
-    uint64_t kernel_entry = kernel_pml4[0];
-    if (kernel_entry & VMM_PRESENT) {
-        uint64_t new_pdpt_phys = (uint64_t)pmm_alloc_page();
-        if (!new_pdpt_phys) {
+    /* Low-half user mappings must not share page-table nodes with the kernel.
+       A fork/exec operation must be able to replace or unmap user pages
+       independently of every other address space. */
+    for (int pml4_idx = 0; pml4_idx < 256; pml4_idx++) {
+        uint64_t src_pdpt_entry = kernel_pml4[pml4_idx];
+        if (!(src_pdpt_entry & VMM_PRESENT)) continue;
+
+        if (src_pdpt_entry & VMM_HUGE) {
+            continue;
+        }
+
+        uint64_t dst_pdpt_phys = (uint64_t)pmm_alloc_page();
+        if (!dst_pdpt_phys) {
             pmm_free_page((void *)new_pml4_phys);
             return 0;
         }
-        uint64_t *new_pdpt = phys_to_ptr(new_pdpt_phys);
-        uint64_t *kernel_pdpt = phys_to_ptr(kernel_entry & 0x000FFFFFFFFFF000ULL);
-        for (int i = 0; i < 512; i++) new_pdpt[i] = kernel_pdpt[i];
-        new_pml4[0] = new_pdpt_phys | (kernel_entry & 0xFFF);
+        uint64_t *dst_pdpt = phys_to_ptr(dst_pdpt_phys);
+        uint64_t *src_pdpt = phys_to_ptr(src_pdpt_entry & 0x000FFFFFFFFFF000ULL);
+        for (int i = 0; i < 512; i++) dst_pdpt[i] = 0;
+
+        if (clone_page_table_level2(src_pdpt, dst_pdpt) != 0) {
+            pmm_free_page((void *)dst_pdpt_phys);
+            pmm_free_page((void *)new_pml4_phys);
+            return 0;
+        }
+        new_pml4[pml4_idx] = dst_pdpt_phys | (src_pdpt_entry & 0xFFFULL);
     }
+
     return new_pml4_phys;
 }
 
@@ -245,8 +307,8 @@ void vmm_destroy_address_space(uint64_t pml4_phys) {
 
 void vmm_switch_address_space(uint64_t pml4_phys) {
     if (pml4_phys == 0) return;
-    __asm__ volatile ("mov %0, %%cr3" : : "r"(pml4_phys) : "memory");
     current_pml4_phys = pml4_phys;
+    __asm__ volatile ("mov %0, %%cr3" : : "r"(pml4_phys) : "memory");
 }
 
 uint64_t vmm_get_current_pml4(void) {

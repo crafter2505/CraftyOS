@@ -187,6 +187,19 @@ int vfs_stat(const char *path, struct vfs_stat *out) {
     return 0;
 }
 
+int vfs_fstat(struct file *f, struct vfs_stat *out) {
+    if (!f || !f->inode || !out) return -1;
+    struct inode *i = f->inode;
+    out->size  = i->size;
+    out->mode  = i->mode;
+    out->uid   = i->uid;
+    out->gid   = i->gid;
+    out->mtime = i->mtime;
+    out->atime = i->atime;
+    out->ctime = i->ctime;
+    return 0;
+}
+
 struct inode *vfs_alloc_inode(void) {
     struct inode *i = (struct inode *)kmalloc(sizeof(struct inode));
     if (!i) return 0;

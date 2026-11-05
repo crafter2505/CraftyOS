@@ -48,8 +48,6 @@ void _start(struct boot_info *boot_info) {
         for (;;) __asm__ volatile ("cli; hlt");
     }
 
-    /* Bring up the framebuffer before the terminal so terminal_init()
-     * knows whether to paint pixels or VGA cells. */
     int fb_ok = 0;
     if (boot_info) {
         fb_ok = fb_init(boot_info);
@@ -152,18 +150,19 @@ void _start(struct boot_info *boot_info) {
     terminal_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
     kprintf("---Running Self-Test---");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
-    run_all_tests();
 
-    /* Hand off to the shell. From here, the shell thread is the main
-     * consumer of keyboard input and the primary interface. */
+    __asm__ volatile ("cli");
+    run_all_tests();
+    __asm__ volatile ("sti");
+
+
     kprintf("\n");
     if (shell_start() != 0) {
         kprintf("Failed to start shell. Halting.\n");
         for (;;) __asm__ volatile ("cli; hlt");
     }
 
-    /* Boot thread becomes idle. The scheduler will run the shell
-     * when input is available. */
+
     for (;;) {
         __asm__ volatile ("hlt");
     }

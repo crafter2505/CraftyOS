@@ -108,6 +108,7 @@ struct vfs_stat {
 };
 
 int vfs_stat(const char *path, struct vfs_stat *out);
+int vfs_fstat(struct file *f, struct vfs_stat *out);
 void vfs_init(void);
 int vfs_mount(const char *path, struct inode *root);
 void vfs_mount_set_free_hook(const char *path, void (*hook)(void *));

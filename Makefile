@@ -30,6 +30,7 @@ KERNEL_LD   	:= kernel/linker.ld
 STAGE1_BIN := build/stage1.bin
 STAGE2_BIN := build/stage2.bin
 KERNEL_ELF := build/kernel.elf
+USER_HELLO := build/user/hello.elf
 
 KERNEL_SECTOR := 40
 
@@ -69,6 +70,16 @@ build/kernel/kernel.o: kernel/drivers/ahci.h
 $(KERNEL_ELF): $(KERNEL_OBJS) $(KERNEL_LD)
 	$(LD) $(LDFLAGS) -o $@ $(KERNEL_OBJS)
 
+$(USER_HELLO): user/hello.c | build
+	mkdir -p build/user
+	gcc -nostdlib -static -ffreestanding -fno-pic \
+	    -fno-stack-protector -fno-asynchronous-unwind-tables \
+	    -mno-red-zone -fno-pie -mcmodel=large \
+	    -Wl,-Ttext-segment=0x8000000000 \
+	    -Wl,-e,_start \
+	    -Wl,-z,max-page-size=0x1000 \
+	    $< -o $@
+
 $(IMG): $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_ELF)
 	dd if=/dev/zero of=$@ bs=512 count=2880 2>/dev/null
 	dd if=$(STAGE1_BIN) of=$@ bs=512 seek=0 conv=notrunc 2>/dev/null
@@ -79,13 +90,14 @@ $(UEFI_EFI): $(UEFI_DIR)/main.c $(UEFI_DIR)/efi.h $(UEFI_DIR)/elf.h \
              kernel/lib/boot_info.h $(UEFI_DIR)/Makefile
 	$(MAKE) -C $(UEFI_DIR)
 
-$(UEFI_IMG): $(UEFI_EFI) $(KERNEL_ELF)
+$(UEFI_IMG): $(UEFI_EFI) $(KERNEL_ELF) $(USER_HELLO)
 	dd if=/dev/zero of=$@ bs=1M count=64
 	mformat -i $@ -F ::
 	mmd -i $@ ::/EFI
 	mmd -i $@ ::/EFI/BOOT
 	mcopy -i $@ $(UEFI_EFI) ::/EFI/BOOT/BOOTX64.EFI
 	mcopy -i $@ $(KERNEL_ELF) ::/EFI/BOOT/kernel.elf
+	mcopy -i $@ $(USER_HELLO) ::/EFI/BOOT/hello.elf
 	printf 'hello from a long name\n' > /tmp/longfilename.txt
 	mcopy -i $@ /tmp/longfilename.txt ::/longfilename.txt
 
@@ -97,6 +109,7 @@ uefi: $(UEFI_IMG)
 
 verify-uefi: $(UEFI_IMG)
 	mdir -i $(UEFI_IMG) ::/EFI/BOOT
+	mdir -i $(UEFI_IMG) ::/
 
 run: $(IMG)
 	qemu-system-x86_64 \

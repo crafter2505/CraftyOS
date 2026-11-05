@@ -49,5 +49,12 @@ SECTIONS
         _user_fork_program_end = .;
     }
 
+    .user_fork_exec ALIGN(4096) : AT(ADDR(.user_fork_exec) - KERNEL_VIRT_BASE + KERNEL_PHYS_BASE)
+    {
+        _user_fork_exec_start = .;
+        *(.user_fork_exec)
+        _user_fork_exec_end = .;
+    }
+
     kernel_end = .;
 }

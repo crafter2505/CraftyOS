@@ -17,8 +17,7 @@ void sched_init(void) {
     }
 
     idle_thread->process = process_current();
-    /* thread_create() now sched_add()s the new thread, so idle is
-     * already on the run queue by the time we get here. */
+    sched_add(idle_thread);
     kprintf(" SCHED: initialized (idle thread=%d)\n", (uint64_t)idle_thread->id);
 }
 
@@ -35,6 +34,7 @@ void sched_add(struct thread *t) {
     t->next = cur->next ? cur->next : cur;
     cur->next = t;
 }
+
 void sched_remove(struct thread *t) {
     if (!t) return;
 
@@ -100,7 +100,19 @@ void schedule(void) {
     struct thread *next = find_next_runnable(cur);
     if (next == cur) return;
 
-    if (cur->state == THREAD_RUNNING) cur->state = THREAD_READY;
+    uint64_t next_pml4 = 0;
+    if (next->process && next->process->pml4_phys) {
+        next_pml4 = next->process->pml4_phys;
+    } else {
+        next_pml4 = vmm_get_kernel_pml4();
+    }
+    if (next_pml4 && next_pml4 != vmm_get_current_pml4()) {
+        vmm_switch_address_space(next_pml4);
+    }
+
+    if (cur->state == THREAD_RUNNING) {
+        cur->state = THREAD_READY;
+    }
     next->state = THREAD_RUNNING;
 
     uint64_t kernel_stack = next->syscall_stack
@@ -108,10 +120,6 @@ void schedule(void) {
                                 next->syscall_stack_size
                           : 0x90000;
     percpu_set_kernel_stack(kernel_stack);
-
-    if (next->process) {
-        vmm_switch_address_space(next->process->pml4_phys);
-    }
 
     set_current_thread(next);
     switch_to(&cur->ctx, &next->ctx);

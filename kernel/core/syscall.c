@@ -10,6 +10,7 @@
 #include "fd.h"
 #include "kmalloc.h"
 #include "vfs.h"
+#include "elf.h"
 
 #include <stddef.h>
 
@@ -270,6 +271,16 @@ void syscall_handler(uint64_t sysno, struct syscall_regs *regs) {
         regs->rax = child ? (uint64_t)child->pid : (uint64_t)-1;
         break;
     }
+    case SYS_exec: {
+        char path[256];
+        if (copy_user_string(regs->rdi, path, sizeof(path)) < 0) {
+            regs->rax = (uint64_t)-1;
+            break;
+        }
+        process_exec(path);
+        break;
+    }
+
     default:
         kprintf("  [syscall] unknown syscall %d\n", sysno);
         regs->rax = (uint64_t)-1;

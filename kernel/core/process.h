@@ -3,6 +3,8 @@
 #include "types.h"
 #include "fd.h"
 #include "isr.h"
+#include "vfs.h"
+#include "syscall_regs.h"
 
 typedef uint64_t pid_t;
 #define PROCESS_NAME_LEN 16
@@ -43,9 +45,34 @@ struct process {
 #define FF_RFLAGS  128
 #define FF_RSP     136
 
-#include "syscall_regs.h"
-
 struct fork_frame {
+    uint64_t rax, rbx, rcx, rdx, rsi, rdi, rbp;
+    uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
+    uint64_t rip;
+    uint64_t rflags;
+    uint64_t rsp;
+};
+
+#define EF_RAX     0
+#define EF_RBX     8
+#define EF_RCX     16
+#define EF_RDX     24
+#define EF_RSI     32
+#define EF_RDI     40
+#define EF_RBP     48
+#define EF_R8      56
+#define EF_R9      64
+#define EF_R10     72
+#define EF_R11     80
+#define EF_R12     88
+#define EF_R13     96
+#define EF_R14     104
+#define EF_R15     112
+#define EF_RIP     120
+#define EF_RFLAGS  128
+#define EF_RSP     136
+
+struct exec_frame {
     uint64_t rax, rbx, rcx, rdx, rsi, rdi, rbp;
     uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
     uint64_t rip;
@@ -62,6 +89,8 @@ int process_wait(pid_t pid, uint32_t *status_out);
 void process_free_address_space(uint64_t pml4_phys);
 uint64_t process_count(void);
 struct process *process_fork(struct syscall_regs *regs);
+void process_exec(const char *path) __attribute__((noreturn));
+
 void process_dump_all(void);
 
 
