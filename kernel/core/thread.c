@@ -7,6 +7,7 @@
 static uint64_t next_thread_id = 1;
 static uint64_t total_threads_created = 0;
 static struct thread *dead_list = 0;
+uint64_t switch_target_pml4 = 0;
 
 static struct thread * current_thread = 0;
 

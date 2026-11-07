@@ -20,6 +20,7 @@ void syscall_handler(uint64_t sysno, struct syscall_regs *regs);
 #define SYS_lseek         10
 #define SYS_fork          11
 #define SYS_exec          12
+#define SYS_readdir       13
 
 void syscall_dump_msrs(void);
 

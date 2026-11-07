@@ -199,6 +199,29 @@ static int64_t sys_lseek(int fd, int64_t offset, int whence) {
     return (int64_t)vfs_seek(f, (uint64_t)offset, whence);
 }
 
+static int64_t sys_readdir(uint64_t path_user, int64_t index,
+                            uint64_t name_user, uint64_t name_len) {
+    if (!path_user || !name_user || name_len == 0) return -1;
+    if (name_len > 256) name_len = 256;
+
+    char path[PATH_MAX];
+    if (copy_user_string(path_user, path, sizeof(path)) < 0) return -1;
+
+    struct inode *dir = vfs_lookup(path);
+    if (!dir) return -1;
+    if (!dir->i_op || !dir->i_op->readdir) return -1;
+
+    char name[256];
+    int rc = dir->i_op->readdir(dir, (uint64_t)index, name, sizeof(name));
+    if (rc < 0) return -1;
+
+    for (uint64_t i = 0; i < name_len; i++) {
+        if (!copy_to_user(name_user + i, &name[i], 1)) return -1;
+        if (name[i] == 0) break;
+    }
+    return 0;
+}
+
 void syscall_handler(uint64_t sysno, struct syscall_regs *regs) {
     switch (sysno) {
     case SYS_exit: {
@@ -278,6 +301,12 @@ void syscall_handler(uint64_t sysno, struct syscall_regs *regs) {
             break;
         }
         process_exec(path);
+        break;
+    }
+
+    case SYS_readdir: {
+        int64_t ret = sys_readdir(regs->rdi, (int64_t)regs->rsi, regs->rdx, regs->rcx);
+        regs->rax = (uint64_t)ret;
         break;
     }
 

@@ -1,7 +1,7 @@
 ASM      := nasm
 ASMFLAGS := -f bin
 CC       := gcc
-CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -Ikernel -Ikernel/mm -Ikernel/core -Ikernel/drivers -Ikernel/lib -Ikernel/arch -Ikernel/fs -Ikernel/shell -c
+CFLAGS   := -m64 -std=c11 -mcmodel=kernel -ffreestanding -mgeneral-regs-only -fno-pic -mno-red-zone -fno-stack-protector -nostdlib -Wall -Wextra -Ikernel -Ikernel/mm -Ikernel/core -Ikernel/drivers -Ikernel/lib -Ikernel/arch -Ikernel/fs -Ikernel/shell -c
 LD       := ld
 LDFLAGS  := -m elf_x86_64 -T kernel/linker.ld -nostdlib -static
 
@@ -31,6 +31,20 @@ STAGE1_BIN := build/stage1.bin
 STAGE2_BIN := build/stage2.bin
 KERNEL_ELF := build/kernel.elf
 USER_HELLO := build/user/hello.elf
+
+USERLAND_BINS := hello ls cat
+USERLAND_ELFS := $(patsubst %,build/userland/%.elf,$(USERLAND_BINS))
+
+USER_CFLAGS := -nostdlib -static -nostartfiles -ffreestanding -fno-pic \
+               -mgeneral-regs-only \
+               -fno-stack-protector -fno-asynchronous-unwind-tables \
+               -mno-red-zone -mcmodel=large \
+               -Wl,-T,userland/lib/user.ld -Wl,-e,_start \
+               -Wl,-z,max-page-size=0x1000 \
+               -Wl,-z,noseparate-code \
+               -Wl,--build-id=none \
+               -Iuserland/lib
+
 
 KERNEL_SECTOR := 40
 
@@ -80,6 +94,10 @@ $(USER_HELLO): user/hello.c | build
 	    -Wl,-z,max-page-size=0x1000 \
 	    $< -o $@
 
+build/userland/%.elf: userland/bin/%.c userland/lib/userlib.c userland/lib/userlib.h | build
+	@mkdir -p build/userland
+	gcc $(USER_CFLAGS) $< userland/lib/userlib.c -o $@
+
 $(IMG): $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_ELF)
 	dd if=/dev/zero of=$@ bs=512 count=2880 2>/dev/null
 	dd if=$(STAGE1_BIN) of=$@ bs=512 seek=0 conv=notrunc 2>/dev/null
@@ -90,14 +108,17 @@ $(UEFI_EFI): $(UEFI_DIR)/main.c $(UEFI_DIR)/efi.h $(UEFI_DIR)/elf.h \
              kernel/lib/boot_info.h $(UEFI_DIR)/Makefile
 	$(MAKE) -C $(UEFI_DIR)
 
-$(UEFI_IMG): $(UEFI_EFI) $(KERNEL_ELF) $(USER_HELLO)
+$(UEFI_IMG): $(UEFI_EFI) $(KERNEL_ELF) $(USER_HELLO) $(USERLAND_ELFS)
 	dd if=/dev/zero of=$@ bs=1M count=64
 	mformat -i $@ -F ::
 	mmd -i $@ ::/EFI
 	mmd -i $@ ::/EFI/BOOT
 	mcopy -i $@ $(UEFI_EFI) ::/EFI/BOOT/BOOTX64.EFI
 	mcopy -i $@ $(KERNEL_ELF) ::/EFI/BOOT/kernel.elf
-	mcopy -i $@ $(USER_HELLO) ::/EFI/BOOT/hello.elf
+	mcopy -i $@ $(USER_HELLO) ::/EFI/BOOT/hello_test.elf
+	mcopy -i $@ build/userland/hello.elf ::/EFI/BOOT/hello
+	mcopy -i $@ build/userland/ls.elf ::/EFI/BOOT/ls
+	mcopy -i $@ build/userland/cat.elf ::/EFI/BOOT/cat
 	printf 'hello from a long name\n' > /tmp/longfilename.txt
 	mcopy -i $@ /tmp/longfilename.txt ::/longfilename.txt
 

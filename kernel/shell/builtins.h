@@ -23,5 +23,6 @@ int cmd_dump    (int argc, char **argv);
 int cmd_reboot  (int argc, char **argv);
 int cmd_forktest(int argc, char **argv);
 int cmd_exectest(int argc, char **argv);
+int cmd_run(int argc, char **argv);
 
 #endif

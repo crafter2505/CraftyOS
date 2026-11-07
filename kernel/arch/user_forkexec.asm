@@ -34,6 +34,6 @@ user_fork_exec_start:
     ud2
 
 path:
-    db "/mnt/efi/boot/hello.elf", 0
+    db "/mnt/efi/boot/hello_test.elf", 0
 
 user_fork_exec_end:

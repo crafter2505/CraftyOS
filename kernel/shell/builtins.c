@@ -32,6 +32,7 @@ const struct shell_cmd builtins_table[] = {
     { "reboot",  cmd_reboot,  "restart the machine" },
     { "forktest", cmd_forktest, "test fork syscall" },
     { "exectest", cmd_exectest, "test fork+exec" },
+    { "run", cmd_run, "run an ELF file at an explicit path" },
     { 0, 0, 0 }
 };
 
@@ -98,8 +99,7 @@ int cmd_ls(int argc, char **argv) {
     char resolved[512];
     const char *target = (argc >= 2) ? argv[1] : shell_get_cwd();
 
-    if (shell_resolve_path(shell_get_cwd(), target,
-                           resolved, (int)sizeof(resolved)) != 0) {
+    if (shell_resolve_path(shell_get_cwd(), target, resolved, (int)sizeof(resolved)) != 0) {
         kprintf("ls: path too long\n");
         return 1;
     }
@@ -110,10 +110,8 @@ int cmd_ls(int argc, char **argv) {
         return 1;
     }
 
-    /* If it's a file, print just the name (like `ls path/to/file`). */
     struct vfs_stat st;
     if (vfs_stat(resolved, &st) == 0 && (st.mode & 0xF000) != 0x4000) {
-        /* It's a regular file — print its basename and return. */
         const char *base = resolved;
         for (const char *p = resolved; *p; p++) {
             if (*p == '/') base = p + 1;
@@ -122,7 +120,6 @@ int cmd_ls(int argc, char **argv) {
         return 0;
     }
 
-    /* It's a directory. Iterate. */
     char namebuf[256];
     for (uint64_t i = 0; ; i++) {
         int r = vfs_readdir(dir, i, namebuf, sizeof(namebuf));
@@ -140,21 +137,18 @@ int cmd_cat(int argc, char **argv) {
     }
 
     char resolved[512];
-    if (shell_resolve_path(shell_get_cwd(), argv[1],
-                           resolved, (int)sizeof(resolved)) != 0) {
+    if (shell_resolve_path(shell_get_cwd(), argv[1], resolved, (int)sizeof(resolved)) != 0) {
         kprintf("cat: path too long\n");
         return 1;
     }
 
-    /* If it's a directory, refuse — reading directory entries as
-     * bytes is never useful and dumps garbage to the terminal. */
     struct vfs_stat st;
     if (vfs_stat(resolved, &st) == 0 && (st.mode & 0xF000) == 0x4000) {
         kprintf("cat: %s: is a directory\n", argv[1]);
         return 1;
     }
 
-    struct file *f = vfs_open(resolved, 0);   /* O_RDONLY = 0 */
+    struct file *f = vfs_open(resolved, 0);
     if (!f) {
         kprintf("cat: %s: no such file\n", argv[1]);
         return 1;
@@ -170,9 +164,6 @@ int cmd_cat(int argc, char **argv) {
         }
         if (n == 0) break;
         for (int i = 0; i < n; i++) {
-            /* terminal_putchar handles \n and \b. Everything else
-             * prints as-is, including binary. That's the caller's
-             * problem — `cat /dev/random` on Linux does the same. */
             terminal_putchar(buf[i]);
         }
     }
@@ -378,4 +369,38 @@ int cmd_exectest(int argc, char **argv) {
     int rc = userspace_run_program(_user_fork_exec_start, _user_fork_exec_end - _user_fork_exec_start);
     kprintf("exectest: program exited %d\n", (uint64_t)rc);
     return (rc == 0) ? 0 : 1;
+}
+
+int cmd_run(int argc, char **argv) {
+    if (argc < 2) {
+        kprintf("usage: run <path>\n");
+        return 1;
+    }
+
+    static char path_copy[256];
+    int i = 0;
+    while (argv[1][i] && i < (int)sizeof(path_copy) - 1) {
+        path_copy[i] = argv[1][i];
+        i++;
+    }
+    path_copy[i] = 0;
+
+    extern void shell_exec_entry(void *arg);
+    struct process *child = process_create("run", shell_exec_entry, path_copy);
+    if (!child) {
+        kprintf("run: process_create failed\n");
+        return 1;
+    }
+
+    uint32_t status = 0;
+    if (process_wait(child->pid, &status) != 0) {
+        kprintf("run: wait failed\n");
+        return 1;
+    }
+
+    if (status != 0) {
+        kprintf("run: exited with status %d\n", (uint64_t)status);
+        return 1;
+    }
+    return 0;
 }

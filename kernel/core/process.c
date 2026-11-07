@@ -156,7 +156,9 @@ void process_free_address_space(uint64_t pml4_phys) {
         if (!(pml4_entry & VMM_PRESENT)) continue;
         if (pml4_entry == kernel_pml4[i]) continue;
 
-        uint64_t *pdpt = (uint64_t *)(DIRECT_MAP_BASE + (pml4_entry & 0x000FFFFFFFFFF000ULL));
+        uint64_t pdpt_phys = pml4_entry & 0x000FFFFFFFFFF000ULL;
+        uint64_t *pdpt = (uint64_t *)(DIRECT_MAP_BASE + pdpt_phys);
+
         uint64_t *shared_pdpt = 0;
         if (kernel_pml4[i] & VMM_PRESENT) {
             shared_pdpt = (uint64_t *)(DIRECT_MAP_BASE +
@@ -169,31 +171,34 @@ void process_free_address_space(uint64_t pml4_phys) {
             if (shared_pdpt && pdpt_entry == shared_pdpt[j]) continue;
             if (pdpt_entry & VMM_HUGE) continue;
 
-            uint64_t *pd = (uint64_t *)(DIRECT_MAP_BASE +
-                          (pdpt_entry & 0x000FFFFFFFFFF000ULL));
+            uint64_t pd_phys = pdpt_entry & 0x000FFFFFFFFFF000ULL;
+            uint64_t *pd = (uint64_t *)(DIRECT_MAP_BASE + pd_phys);
 
             for (int k = 0; k < 512; k++) {
                 uint64_t pd_entry = pd[k];
                 if (!(pd_entry & VMM_PRESENT)) continue;
 
                 if (pd_entry & VMM_HUGE) {
-                    uint64_t phys = pd_entry & 0x000FFFFFFFE00000ULL;
-                    free_pages((void *)phys, 9);
+                    uint64_t huge_phys = pd_entry & 0x000FFFFFFFE00000ULL;
+                    free_pages((void *)huge_phys, 9);
                     continue;
                 }
 
-                uint64_t *pt = (uint64_t *)(DIRECT_MAP_BASE + (pd_entry & 0x000FFFFFFFFFF000ULL));
+                uint64_t pt_phys = pd_entry & 0x000FFFFFFFFFF000ULL;
+                uint64_t *pt = (uint64_t *)(DIRECT_MAP_BASE + pt_phys);
+
                 for (int m = 0; m < 512; m++) {
                     uint64_t pt_entry = pt[m];
                     if (!(pt_entry & VMM_PRESENT)) continue;
-                    uint64_t phys = pt_entry & 0x000FFFFFFFFFF000ULL;
-                    pmm_free_page((void *)phys);
+                    uint64_t leaf_phys = pt_entry & 0x000FFFFFFFFFF000ULL;
+                    pmm_free_page((void *)leaf_phys);
                 }
-                pmm_free_page((void *)pt);
+
+                pmm_free_page((void *)pt_phys);
             }
-            pmm_free_page((void *)pd);
+            pmm_free_page((void *)pd_phys);
         }
-        pmm_free_page((void *)pdpt);
+        pmm_free_page((void *)pdpt_phys);
     }
     pmm_free_page((void *)pml4_phys);
 }

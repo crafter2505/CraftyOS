@@ -77,6 +77,7 @@ void thread_reap_pending(void);
 void thread_mark_dead_and_unlink(void);
 
 extern void switch_to(struct thread_context *old_ctx, struct thread_context *new_ctx);
+extern uint64_t switch_target_pml4;
 
 
 

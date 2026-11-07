@@ -106,9 +106,8 @@ void schedule(void) {
     } else {
         next_pml4 = vmm_get_kernel_pml4();
     }
-    if (next_pml4 && next_pml4 != vmm_get_current_pml4()) {
-        vmm_switch_address_space(next_pml4);
-    }
+    switch_target_pml4 = next_pml4;
+    vmm_set_current_address_space(next_pml4);
 
     if (cur->state == THREAD_RUNNING) {
         cur->state = THREAD_READY;

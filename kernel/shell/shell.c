@@ -5,6 +5,8 @@
 #include "sched.h"
 #include "kprintf.h"
 #include "terminal.h"
+#include "vfs.h"
+#include "process.h"
 
 static char cwd[256] = "/";
 
@@ -106,9 +108,41 @@ static int tokenize(char *line, char **argv, int max_args) {
     return argc;
 }
 
+void shell_exec_entry(void *arg);
+
+static int shell_run_external(int argc, char **argv) {
+    (void)argc;
+
+    char path[256];
+    const char *prefix = "/mnt/efi/boot/";
+    const char *name = argv[0];
+    int p = 0;
+    while (prefix[p] && p < (int)sizeof(path) - 1) { path[p] = prefix[p]; p++; }
+    int n = 0;
+    while (name[n] && p < (int)sizeof(path) - 1) { path[p++] = name[n++]; }
+    path[p] = 0;
+
+    struct vfs_stat st;
+    if (vfs_stat(path, &st) != 0) return -2;
+
+    static char path_copy[256];
+    for (int i = 0; i <= p; i++) path_copy[i] = path[i];
+
+    struct process *child = process_create("ext", shell_exec_entry, path_copy);
+    if (!child) return -1;
+
+    uint32_t status = 0;
+    if (process_wait(child->pid, &status) != 0) return -1;
+    return (status == 0) ? 0 : -1;
+}
+
+void shell_exec_entry(void *arg) {
+    const char *path = (const char *)arg;
+    process_exec(path);
+}
+
 int shell_dispatch(int argc, char **argv) {
     if (argc == 0 || !argv || !argv[0]) return -1;
-
     for (int i = 0; builtins_table[i].name; i++) {
         const char *a = argv[0];
         const char *b = builtins_table[i].name;
@@ -120,5 +154,5 @@ int shell_dispatch(int argc, char **argv) {
         }
     }
 
-    return -2;
+    return shell_run_external(argc, argv);
 }

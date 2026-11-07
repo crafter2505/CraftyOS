@@ -46,6 +46,15 @@ switch_to:
     ; not affected by rsp change)
     mov rsp, [rsi + 136]
 
+    extern switch_target_pml4
+    mov rax, [rel switch_target_pml4]
+    test rax, rax
+    jz .skip_cr3
+    mov cr3, rax
+    mov qword [rel switch_target_pml4], 0
+
+.skip_cr3:
+
     ; Push the entry frame: rflags on top, rip below
     push qword [rsi + 120]      ; RIP (pushed first → deeper)
     push qword [rsi + 128]      ; RFLAGS (pushed last → on top)
