@@ -1,12 +1,17 @@
 #include "fd.h"
 #include "vfs.h"
 #include "kprintf.h"
+#include "console.h"
+
 
 void fd_table_init(struct fd_table *t) {
     if (!t) return;
     for (int i = 0; i < MAX_FDS; i++) {
         t->fds[i] = 0;
     }
+    t->fds[FD_STDIN]  = console_file_create();
+    t->fds[FD_STDOUT] = console_file_create();
+    t->fds[FD_STDERR] = console_file_create();
 }
 
 int fd_alloc(struct fd_table *t, struct file *f) {

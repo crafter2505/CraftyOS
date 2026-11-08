@@ -26,6 +26,8 @@
 #define PATH_MAX 4096
 #define MAX_OPEN_FLAGS 0x10000
 
+static int copy_from_user(void *kernel_buf, uint64_t user_ptr, uint64_t len);
+
 extern void syscall_entry(void);
 
 _Static_assert(offsetof(struct syscall_regs, rax)    == 112, "syscall_regs.rax");
@@ -57,20 +59,28 @@ void syscall_dump_msrs(void) {
     kprintf("    IA32_EFER  = 0x%x\n", rdmsr(IA32_EFER));
 }
 
-static int64_t sys_write(int fd, uint64_t buf, uint64_t len) {
-    if (fd != 1) {
-        kprintf("  [sys_write] unsupported fd=%d\n", (int64_t)fd);
-    }
-    if (!vmm_is_user_range(buf, len)) {
-        kprintf("  [sys_write] invalid user range: buf=0x%x len=%d\n",
-                buf, len);
+static int64_t sys_write(int fd, uint64_t user_buf, uint64_t count) {
+    if (user_buf == 0 || count == 0) return -1;
+
+    struct process *p = process_current();
+    if (!p) return -1;
+
+    struct file *f = fd_get(&p->fds, fd);
+    if (!f) return -1;
+
+    if (!vmm_is_user_range(user_buf, count)) return -1;
+
+    uint64_t to_write = count > 4096 ? 4096 : count;
+    uint8_t *bounce = (uint8_t *)kmalloc(to_write);
+    if (!bounce) return -1;
+    if (copy_from_user(bounce, user_buf, to_write) < 0) {
+        kfree(bounce);
         return -1;
     }
-    const char *user_buf = (const char *)buf;
-    for (uint64_t i = 0; i < len; i++) {
-        terminal_putchar(user_buf[i]);
-    }
-    return (int64_t)len;
+
+    int n = vfs_write(f, bounce, to_write);
+    kfree(bounce);
+    return n;
 }
 
 static int copy_user_string(uint64_t user_ptr, char *kernel_buf,
@@ -126,6 +136,32 @@ static int copy_to_user(uint64_t user_ptr, const void *kernel_buf,
     return (int)len;
 }
 
+static int copy_from_user(void *kernel_buf, uint64_t user_ptr,
+                           uint64_t len) {
+    if (!kernel_buf || len == 0) return -1;
+    if (user_ptr == 0) return -1;
+    if (user_ptr >= USER_SPACE_MAX) return -1;
+
+    uint64_t current_page = user_ptr & ~0xFFFULL;
+    if (!vmm_is_user_accessible(current_page)) return -1;
+
+    const uint8_t *u = (const uint8_t *)user_ptr;
+    uint8_t *k = (uint8_t *)kernel_buf;
+
+    for (uint64_t i = 0; i < len; i++) {
+        uint64_t addr = user_ptr + i;
+        uint64_t page = addr & ~0xFFFULL;
+
+        if (page != current_page) {
+            if (!vmm_is_user_accessible(page)) return -1;
+            current_page = page;
+        }
+
+        k[i] = u[i];
+    }
+    return (int)len;
+}
+
 static int64_t sys_open(uint64_t path_user, uint32_t flags) {
     if (path_user == 0) return -1;
     if (flags & ~(uint32_t)MAX_OPEN_FLAGS) return -1;
@@ -163,6 +199,7 @@ static int64_t sys_close(int fd) {
 
 static int64_t sys_read(int fd, uint64_t user_buf, uint64_t count) {
     if (user_buf == 0 || count == 0) return -1;
+    if (!vmm_is_user_range(user_buf, count)) return -1;
 
     struct process *p = process_current();
     if (!p) return -1;
@@ -171,20 +208,16 @@ static int64_t sys_read(int fd, uint64_t user_buf, uint64_t count) {
     if (!f) return -1;
 
     uint64_t to_read = count > 4096 ? 4096 : count;
-
     uint8_t *bounce = (uint8_t *)kmalloc(to_read);
     if (!bounce) return -1;
 
     int n = vfs_read(f, bounce, to_read);
-
     if (n > 0) {
-        int copied = copy_to_user(user_buf, bounce, (uint64_t)n);
-        if (copied < 0) {
+        if (copy_to_user(user_buf, bounce, (uint64_t)n) < 0) {
             kfree(bounce);
             return -1;
         }
     }
-
     kfree(bounce);
     return n;
 }

@@ -15,7 +15,6 @@ static const uint32_t vga_palette[16] = {
 
 extern const uint8_t font_8x16[95][16];
 
-/* 16x32 glyphs, generated from font_8x16 at init by 2x upscale. */
 static uint8_t font_16x32[95][32][2];
 
 static uint32_t font_scale = 1;
@@ -99,9 +98,6 @@ void fb_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color
     }
 }
 
-/* Copy a rectangular pixel block within the framebuffer. Rows are
- * copied one at a time so overlapping regions (scrolling up) work
- * correctly even if src and dst share memory. */
 void fb_copy_rect(uint32_t src_x, uint32_t src_y,
                   uint32_t dst_x, uint32_t dst_y,
                   uint32_t w, uint32_t h) {

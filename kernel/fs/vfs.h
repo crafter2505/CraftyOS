@@ -115,10 +115,10 @@ void vfs_mount_set_free_hook(const char *path, void (*hook)(void *));
 struct inode *vfs_lookup(const char *path);
 struct file *vfs_open(const char *path, uint32_t flags);
 int vfs_read(struct file *f, void *buf, uint64_t count);
+int vfs_write(struct file *f, const void *buf, uint64_t count);
 int vfs_close(struct file *f);
 uint64_t vfs_seek(struct file *f, uint64_t offset, int whence);
-int vfs_readdir(struct inode *dir, uint64_t index,
-                char *out_name, uint64_t name_len);
+int vfs_readdir(struct inode *dir, uint64_t index,  char *out_name, uint64_t name_len);
 struct inode *vfs_alloc_inode(void);
 void vfs_free_inode(struct inode *i);
 

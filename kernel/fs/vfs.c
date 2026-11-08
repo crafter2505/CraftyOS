@@ -135,6 +135,13 @@ int vfs_read(struct file *f, void *buf, uint64_t count) {
     return f->inode->f_op->read(f, buf, count);
 }
 
+int vfs_write(struct file *f, const void *buf, uint64_t count) {
+    if (!f || !f->inode || !buf) return -1;
+    if ((f->flags & 3) == O_RDONLY) return -1;
+    if (!f->inode->f_op || !f->inode->f_op->write) return -1;
+    return f->inode->f_op->write(f, buf, count);
+}
+
 int vfs_close(struct file *f) {
     if (!f) return -1;
     if (f->inode) {
