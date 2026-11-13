@@ -11,103 +11,6 @@
 extern uint8_t _user_program_start[];
 extern uint8_t _user_program_end[];
 
-int enter_userspace(uint64_t entry, uint64_t user_stack_top) {
-    struct thread *self = thread_current();
-    if (!self || !self->syscall_stack) {
-        kprintf("  [user] FAIL: no dedicated syscall stack for current thread\n");
-        return -1;
-    }
-    struct kernel_continuation *cont = &self->user_continuation;
-
-    struct process *proc = process_current();
-    if (proc) {
-        vmm_switch_address_space(proc->pml4_phys);
-    }
-
-    uint64_t continuation_rip;
-
-    __asm__ volatile (
-        "mov %%rsp, %0\n"
-        "mov %%rbp, %1\n"
-        "mov %%rbx, %2\n"
-        "mov %%r12, %3\n"
-        "mov %%r13, %4\n"
-        "mov %%r14, %5\n"
-        "mov %%r15, %6\n"
-        "lea 1f(%%rip), %7\n"
-        : "=m"(cont->rsp),
-          "=m"(cont->rbp),
-          "=m"(cont->rbx),
-          "=m"(cont->r12),
-          "=m"(cont->r13),
-          "=m"(cont->r14),
-          "=m"(cont->r15),
-          "=r"(continuation_rip)
-        :
-        : "memory"
-    );
-    cont->rip = continuation_rip;
-
-    uint64_t kernel_stack = (uint64_t)self->syscall_stack +
-                            self->syscall_stack_size;
-    percpu_set_kernel_stack(kernel_stack);
-
-    uint64_t user_cs = 0x28 | 3;
-    uint64_t user_ss = 0x20 | 3;
-    uint64_t rflags  = 0x202;
-
-    __asm__ volatile (
-        "cli\n"
-        "push %0\n"
-        "push %1\n"
-        "push %2\n"
-        "push %3\n"
-        "push %4\n"
-        "swapgs\n"
-        "iretq\n"
-        "1:\n"
-        :
-        : "r"(user_ss),
-          "r"(user_stack_top),
-          "r"(rflags),
-          "r"(user_cs),
-          "r"(entry)
-        : "memory"
-    );
-
-    return 0;
-}
-
-void userspace_exit_to_kernel(void) {
-    struct thread *self = thread_current();
-    if (!self) {
-        for (;;) __asm__ volatile ("cli; hlt");
-    }
-    struct kernel_continuation *cont = &self->user_continuation;
-
-    __asm__ volatile (
-        "mov %0, %%rsp\n"
-        "mov %1, %%rbp\n"
-        "mov %2, %%rbx\n"
-        "mov %3, %%r12\n"
-        "mov %4, %%r13\n"
-        "mov %5, %%r14\n"
-        "mov %6, %%r15\n"
-        "jmp *%7\n"
-        :
-        : "r"(cont->rsp),
-          "r"(cont->rbp),
-          "r"(cont->rbx),
-          "r"(cont->r12),
-          "r"(cont->r13),
-          "r"(cont->r14),
-          "r"(cont->r15),
-          "r"(cont->rip)
-        : "memory"
-    );
-    __builtin_unreachable();
-}
-
 int userspace_run_program(const void *prog_start, uint64_t prog_size) {
     struct process *proc = process_current();
     if (!proc) return -1;
@@ -185,7 +88,7 @@ int userspace_run_program(const void *prog_start, uint64_t prog_size) {
             USER_CODE_BASE, USER_STACK_TOP,
             (uint64_t)(0x28 | 3), (uint64_t)(0x20 | 3));
 
-    rv = enter_userspace(USER_CODE_BASE, USER_STACK_TOP);
+    rv = enter_userspace(thread_current(), USER_CODE_BASE, USER_STACK_TOP);
     if (rv != 0) {
         return rv;
     }

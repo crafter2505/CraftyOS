@@ -219,8 +219,6 @@ int process_wait(pid_t pid, uint32_t *status_out) {
     for (;;) {
         if (p->exit_called) {
             if (status_out) *status_out = p->exit_status;
-            kprintf("  WAIT-DBG: reaping p->pid=%d p->pml4=0x%x cur=0x%x\n",
-                    (int)p->pid, p->pml4_phys, vmm_get_current_pml4());
             process_free_address_space(p->pml4_phys);
             process_unlink_and_free(p);
             return 0;
@@ -375,8 +373,6 @@ struct process *process_fork(struct syscall_regs *regs) {
 }
 
 static void free_user_pages(struct process *p) {
-    kprintf("  FREE-DBG: p->pid=%d p->pml4=0x%x cur_before=0x%x\n",
-            (int)p->pid, p->pml4_phys, vmm_get_current_pml4());
     uint64_t saved = vmm_get_current_pml4();
     vmm_switch_address_space(p->pml4_phys);
     for (uint64_t va = USER_CODE_BASE; va < USER_STACK_TOP; va += VMM_PAGE_SIZE) {
@@ -389,8 +385,21 @@ static void free_user_pages(struct process *p) {
     vmm_switch_address_space(saved);
 }
 
-__attribute__((noreturn))
-void process_exec(const char *path) {
+static int copy_to_user_stack(uint64_t user_vaddr, const void *src, uint64_t len) {
+    const uint8_t *s = (const uint8_t *)src;
+    for (uint64_t i = 0; i < len; i++) {
+        uint64_t va = user_vaddr + i;
+        uint64_t phys = vmm_translate(va);
+        if (phys == 0) return -1;
+        uint8_t *kva = (uint8_t *)(DIRECT_MAP_BASE +
+                                    (phys & 0x000FFFFFFFFFF000ULL)) +
+                       (va & 0xFFF);
+        *kva = s[i];
+    }
+    return 0;
+}
+
+void process_exec(const char *path, const char *const argv[]) {
     if (!path) process_exit(127);
 
     struct file *f = vfs_open(path, 0);
@@ -405,13 +414,7 @@ void process_exec(const char *path) {
         process_exit(127);
     }
 
-    kprintf("  EXEC-DBG: path=%s p->pid=%d p->pml4=0x%x cur=0x%x\n",
-            path, (int)p->pid, p->pml4_phys, vmm_get_current_pml4());
-
     free_user_pages(p);
-
-    kprintf("  EXEC-DBG: after free_user_pages, cur=0x%x\n",
-            vmm_get_current_pml4());
 
     uint64_t entry = 0;
     int rc = elf_load_user(f, &entry);
@@ -421,27 +424,73 @@ void process_exec(const char *path) {
         process_exit(127);
     }
 
-    uint64_t stack_base = USER_STACK_TOP - USER_STACK_SIZE;
+    uint64_t stack_base  = USER_STACK_TOP - USER_STACK_SIZE;
     uint64_t stack_pages = USER_STACK_SIZE / VMM_PAGE_SIZE;
     for (uint64_t i = 0; i < stack_pages; i++) {
         uint64_t phys = (uint64_t)pmm_alloc_page();
         if (!phys) process_exit(127);
         uint8_t *kva = (uint8_t *)(DIRECT_MAP_BASE + phys);
         for (int b = 0; b < (int)VMM_PAGE_SIZE; b++) kva[b] = 0;
-        if (vmm_map_user(stack_base + i * VMM_PAGE_SIZE, phys, VMM_WRITABLE) != 0) {
+        if (vmm_map_user(stack_base + i * VMM_PAGE_SIZE, phys,
+                          VMM_WRITABLE) != 0) {
             pmm_free_page((void *)phys);
             process_exit(127);
         }
     }
 
+    int argc = 0;
+    if (argv) {
+        while (argc < 32 && argv[argc]) argc++;
+    }
+
+    uint64_t strings_bytes = 0;
+    int arg_lens[32];
+    for (int i = 0; i < argc; i++) {
+        int len = 0;
+        while (argv[i][len]) len++;
+        len++;
+        arg_lens[i] = len;
+        strings_bytes += (uint64_t)len;
+    }
+
+    uint64_t block_bytes = strings_bytes + 8 + (uint64_t)argc * 8 + 8;
+
+    block_bytes = (block_bytes + 15) & ~0xFULL;
+
+    if (block_bytes > USER_STACK_SIZE) process_exit(127);
+
+    uint64_t sp_at_entry = USER_STACK_TOP - block_bytes;
+
+    uint64_t write_pos = USER_STACK_TOP;
+    uint64_t arg_ptrs[32];
+    for (int i = argc - 1; i >= 0; i--) {
+        write_pos -= (uint64_t)arg_lens[i];
+        if (copy_to_user_stack(write_pos, argv[i], (uint64_t)arg_lens[i]) != 0) {
+            process_exit(127);
+        }
+        arg_ptrs[i] = write_pos;
+    }
+
+    write_pos = sp_at_entry;
+
+    uint64_t argc_u64 = (uint64_t)argc;
+    if (copy_to_user_stack(write_pos, &argc_u64, 8) != 0) process_exit(127);
+    write_pos += 8;
+
+    for (int i = 0; i < argc; i++) {
+        if (copy_to_user_stack(write_pos, &arg_ptrs[i], 8) != 0) process_exit(127);
+        write_pos += 8;
+    }
+
+    uint64_t zero = 0;
+    if (copy_to_user_stack(write_pos, &zero, 8) != 0) process_exit(127);
+
     struct exec_frame frame;
     for (size_t i = 0; i < sizeof(frame); i++) ((uint8_t *)&frame)[i] = 0;
     frame.rip    = entry;
-    frame.rsp    = USER_STACK_TOP - 16;
+    frame.rsp    = sp_at_entry;
     frame.rflags = 0x202;
 
-    kprintf("  EXEC: '%s' -> entry=0x%x rsp=0x%x cur=0x%x\n",
-            path, entry, frame.rsp, vmm_get_current_pml4());
     exec_enter_user_asm(&frame);
     __builtin_unreachable();
 }

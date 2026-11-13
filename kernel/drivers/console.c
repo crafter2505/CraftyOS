@@ -3,6 +3,7 @@
 #include "terminal.h"
 #include "vfs.h"
 #include "kmalloc.h"
+#include "serial.h"
 
 static int console_read(struct file *f, void *buf, uint64_t count) {
     (void)f;
@@ -18,6 +19,7 @@ static int console_write(struct file *f, const void *buf, uint64_t count) {
     const char *s = (const char *)buf;
     for (uint64_t i = 0; i < count; i++) {
         terminal_putchar(s[i]);
+        serial_putchar(s[i]);
     }
     return (int)count;
 }
@@ -55,7 +57,7 @@ struct file *console_file_create(void) {
 
     f->inode = &console_inode;
     f->pos = 0;
-    f->flags = 0;
+    f->flags = O_RDWR;
     f->refcount = 1;
     return f;
 }

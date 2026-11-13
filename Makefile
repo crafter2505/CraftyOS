@@ -32,8 +32,9 @@ STAGE2_BIN := build/stage2.bin
 KERNEL_ELF := build/kernel.elf
 USER_HELLO := build/user/hello.elf
 
-USERLAND_BINS := hello ls cat
+USERLAND_BINS := hello ls cat sh
 USERLAND_ELFS := $(patsubst %,build/userland/%.elf,$(USERLAND_BINS))
+USERLAND_CRT0 := build/userland/crt0.o
 
 USER_CFLAGS := -nostdlib -static -nostartfiles -ffreestanding -fno-pic \
                -mgeneral-regs-only \
@@ -94,9 +95,13 @@ $(USER_HELLO): user/hello.c | build
 	    -Wl,-z,max-page-size=0x1000 \
 	    $< -o $@
 
-build/userland/%.elf: userland/bin/%.c userland/lib/userlib.c userland/lib/userlib.h | build
+build/userland/%.elf: userland/bin/%.c userland/lib/userlib.c userland/lib/userlib.h $(USERLAND_CRT0) | build
 	@mkdir -p build/userland
-	gcc $(USER_CFLAGS) $< userland/lib/userlib.c -o $@
+	gcc $(USER_CFLAGS) $(USERLAND_CRT0) $< userland/lib/userlib.c -o $@
+
+$(USERLAND_CRT0): userland/lib/crt0.asm | build
+	@mkdir -p build/userland
+	$(ASM) -f elf64 $< -o $@
 
 $(IMG): $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_ELF)
 	dd if=/dev/zero of=$@ bs=512 count=2880 2>/dev/null
@@ -119,6 +124,7 @@ $(UEFI_IMG): $(UEFI_EFI) $(KERNEL_ELF) $(USER_HELLO) $(USERLAND_ELFS)
 	mcopy -i $@ build/userland/hello.elf ::/EFI/BOOT/hello
 	mcopy -i $@ build/userland/ls.elf ::/EFI/BOOT/ls
 	mcopy -i $@ build/userland/cat.elf ::/EFI/BOOT/cat
+	mcopy -i $@ build/userland/sh.elf ::/EFI/BOOT/sh
 	printf 'hello from a long name\n' > /tmp/longfilename.txt
 	mcopy -i $@ /tmp/longfilename.txt ::/longfilename.txt
 

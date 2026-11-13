@@ -3,6 +3,14 @@
 #include "sched.h"
 #include "kprintf.h"
 #include "kmalloc.h"
+#include <stddef.h>
+
+_Static_assert(offsetof(struct thread, syscall_stack) == 48,
+               "update THREAD_SYSCALL_STACK in user_entry.asm");
+_Static_assert(offsetof(struct thread, syscall_stack_size) == 56,
+               "update THREAD_SYSCALL_STACK_SIZE in user_entry.asm");
+_Static_assert(offsetof(struct thread, user_continuation) == 208,
+               "expected 208");
 
 static uint64_t next_thread_id = 1;
 static uint64_t total_threads_created = 0;

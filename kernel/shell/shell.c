@@ -8,6 +8,9 @@
 #include "vfs.h"
 #include "process.h"
 
+struct exec_args g_exec_args;
+
+
 static char cwd[256] = "/";
 
 static void shell_thread(void *arg);
@@ -108,18 +111,19 @@ static int tokenize(char *line, char **argv, int max_args) {
     return argc;
 }
 
-void shell_exec_entry(void *arg);
+void shell_exec_entry(void *arg) {
+    struct exec_args *ea = (struct exec_args *)arg;
+    process_exec(ea->path, ea->argv);
+}
 
 static int shell_run_external(int argc, char **argv) {
-    (void)argc;
-
     char path[256];
     const char *prefix = "/mnt/efi/boot/";
     const char *name = argv[0];
     int p = 0;
-    while (prefix[p] && p < (int)sizeof(path) - 1) { path[p] = prefix[p]; p++; }
+    while (prefix[p] && p < 255) { path[p] = prefix[p]; p++; }
     int n = 0;
-    while (name[n] && p < (int)sizeof(path) - 1) { path[p++] = name[n++]; }
+    while (name[n] && p < 255) { path[p++] = name[n++]; }
     path[p] = 0;
 
     struct vfs_stat st;
@@ -127,18 +131,17 @@ static int shell_run_external(int argc, char **argv) {
 
     static char path_copy[256];
     for (int i = 0; i <= p; i++) path_copy[i] = path[i];
+    g_exec_args.path = path_copy;
 
-    struct process *child = process_create("ext", shell_exec_entry, path_copy);
+    for (int i = 0; i < argc && i < 31; i++) g_exec_args.argv[i] = argv[i];
+    g_exec_args.argv[argc < 31 ? argc : 31] = 0;
+
+    struct process *child = process_create("ext", shell_exec_entry, &g_exec_args);
     if (!child) return -1;
 
     uint32_t status = 0;
     if (process_wait(child->pid, &status) != 0) return -1;
     return (status == 0) ? 0 : -1;
-}
-
-void shell_exec_entry(void *arg) {
-    const char *path = (const char *)arg;
-    process_exec(path);
 }
 
 int shell_dispatch(int argc, char **argv) {

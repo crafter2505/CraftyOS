@@ -25,8 +25,40 @@
 
 #define PATH_MAX 4096
 #define MAX_OPEN_FLAGS 0x10000
+#define EXEC_MAX_ARGS 32
+#define EXEC_ARG_BYTES 2048
 
 static int copy_from_user(void *kernel_buf, uint64_t user_ptr, uint64_t len);
+static int copy_user_string(uint64_t user_ptr, char *kernel_buf,
+                            uint64_t max_len);
+
+static int copy_user_argv(uint64_t user_argv, char *storage,
+                          uint64_t storage_size, const char **argv) {
+    uint64_t used = 0;
+
+    for (uint64_t i = 0; i <= EXEC_MAX_ARGS; i++) {
+        uint64_t arg_ptr = 0;
+        uint64_t slot = user_argv + i * sizeof(arg_ptr);
+        if (slot < user_argv || slot >= USER_SPACE_MAX ||
+            sizeof(arg_ptr) > USER_SPACE_MAX - slot ||
+            copy_from_user(&arg_ptr, slot, sizeof(arg_ptr)) < 0) {
+            return -1;
+        }
+        if (!arg_ptr) {
+            argv[i] = 0;
+            return 0;
+        }
+        if (i == EXEC_MAX_ARGS || used >= storage_size) return -1;
+
+        int len = copy_user_string(arg_ptr, storage + used,
+                                   storage_size - used);
+        if (len < 0) return -1;
+        argv[i] = storage + used;
+        used += (uint64_t)len + 1;
+    }
+
+    return -1;
+}
 
 extern void syscall_entry(void);
 
@@ -249,7 +281,7 @@ static int64_t sys_readdir(uint64_t path_user, int64_t index,
     if (rc < 0) return -1;
 
     for (uint64_t i = 0; i < name_len; i++) {
-        if (!copy_to_user(name_user + i, &name[i], 1)) return -1;
+        if (copy_to_user(name_user + i, &name[i], 1) < 0) return -1;
         if (name[i] == 0) break;
     }
     return 0;
@@ -327,20 +359,39 @@ void syscall_handler(uint64_t sysno, struct syscall_regs *regs) {
         regs->rax = child ? (uint64_t)child->pid : (uint64_t)-1;
         break;
     }
+    
     case SYS_exec: {
-        char path[256];
-        if (copy_user_string(regs->rdi, path, sizeof(path)) < 0) {
-            regs->rax = (uint64_t)-1;
-            break;
-        }
-        process_exec(path);
+    char path[256];
+    if (copy_user_string(regs->rdi, path, sizeof(path)) < 0) {
+        regs->rax = (uint64_t)-1;
         break;
+    }
+    const char *kargv[32];
+    char kstrings[32][128];
+    int kargc = 0;
+    uint64_t uargv = regs->rsi;
+    if (uargv) {
+        for (int i = 0; i < 31; i++) {
+            uint64_t uptr = 0;
+            if (!vmm_is_user_range(uargv + i * 8, 8)) break;
+            const uint64_t *p = (const uint64_t *)(uargv + i * 8);
+            uptr = *p;
+            if (uptr == 0) break;
+            if (copy_user_string(uptr, kstrings[i], sizeof(kstrings[i])) < 0) break;
+            kargv[i] = kstrings[i];
+            kargc++;
+        }
+    }
+    kargv[kargc] = 0;
+
+    process_exec(path, kargv);
+    break;
     }
 
     case SYS_readdir: {
-        int64_t ret = sys_readdir(regs->rdi, (int64_t)regs->rsi, regs->rdx, regs->rcx);
-        regs->rax = (uint64_t)ret;
-        break;
+    int64_t ret = sys_readdir(regs->rdi, (int64_t)regs->rsi, regs->rdx, regs->r10);
+    regs->rax = (uint64_t)ret;
+    break;
     }
 
     default:

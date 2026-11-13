@@ -89,8 +89,8 @@ int process_wait(pid_t pid, uint32_t *status_out);
 void process_free_address_space(uint64_t pml4_phys);
 uint64_t process_count(void);
 struct process *process_fork(struct syscall_regs *regs);
-void process_exec(const char *path) __attribute__((noreturn));
-
+void process_exec(const char *path, const char *const argv[])
+    __attribute__((noreturn));
 void process_dump_all(void);
 
 

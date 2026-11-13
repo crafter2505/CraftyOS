@@ -373,7 +373,7 @@ int cmd_exectest(int argc, char **argv) {
 
 int cmd_run(int argc, char **argv) {
     if (argc < 2) {
-        kprintf("usage: run <path>\n");
+        kprintf("usage: run <path> [args...]\n");
         return 1;
     }
 
@@ -385,8 +385,14 @@ int cmd_run(int argc, char **argv) {
     }
     path_copy[i] = 0;
 
-    extern void shell_exec_entry(void *arg);
-    struct process *child = process_create("run", shell_exec_entry, path_copy);
+    g_exec_args.path = path_copy;
+    g_exec_args.argv[0] = path_copy;
+    for (int k = 2; k < argc && k - 1 < 31; k++) {
+        g_exec_args.argv[k - 1] = argv[k];
+    }
+    g_exec_args.argv[(argc - 1 < 31) ? argc - 1 : 31] = 0;
+
+    struct process *child = process_create("run", shell_exec_entry, &g_exec_args);
     if (!child) {
         kprintf("run: process_create failed\n");
         return 1;

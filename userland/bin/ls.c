@@ -1,12 +1,11 @@
 #include "userlib.h"
 
-#define TEST_PATH "/mnt"
-
-void _start(void) {
+int main(int argc, char **argv) {
+    const char *path = (argc >= 2) ? argv[1] : "/mnt";
     char name[256];
-    for (int i = 0; readdir(TEST_PATH, i, name, sizeof(name)) >= 0; i++) {
+    for (int i = 0; readdir(path, i, name, sizeof(name)) >= 0; i++) {
         write(1, name, strlen(name));
         write(1, "\n", 1);
     }
-    _exit(0);
+    return 0;
 }

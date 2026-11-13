@@ -1,7 +1,8 @@
 #include "userlib.h"
 
-void _start(void) {
+int main(int argc, char **argv) {
+    (void)argc; (void)argv;
     const char *msg = "hello from userland\n";
     write(1, msg, strlen(msg));
-    _exit(0);
+    return 0;
 }

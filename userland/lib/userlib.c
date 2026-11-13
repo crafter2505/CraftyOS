@@ -76,9 +76,15 @@ int fork(void) {
     return (int)syscall0(SYS_fork);
 }
 
-int exec(const char *path) {
-    syscall1(SYS_exec, (long)path);
+void execv(const char *path, const char *const argv[]) {
+    syscall2(SYS_exec, (long)path, (long)argv);
     _exit(127);
+}
+
+int exec(const char *path, const char *const argv[]) {
+    syscall2(SYS_exec, (long)path, (long)argv);
+    _exit(127);
+    return -1;
 }
 
 int wait(int pid) {

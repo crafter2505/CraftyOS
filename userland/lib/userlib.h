@@ -26,6 +26,7 @@ long syscall2(long n, long a, long b);
 long syscall3(long n, long a, long b, long c);
 long syscall4(long n, long a, long b, long c, long d);
 
+int main(int argc, char **argv);
 void _exit(int status) __attribute__((noreturn));
 int  write(int fd, const void *buf, size_t count);
 int  read(int fd, void *buf, size_t count);
@@ -33,8 +34,9 @@ int  open(const char *path, int flags);
 int  close(int fd);
 off_t lseek(int fd, off_t offset, int whence);
 int  fork(void);
-int  exec(const char *path) __attribute__((noreturn));
-int  wait(int pid);
+void execv(const char *path, const char *const argv[]) __attribute__((noreturn));
+int  exec(const char *path, const char *const argv[])
+    __attribute__((noreturn));int  wait(int pid);
 int  getpid(void);
 int  getppid(void);
 int  readdir(const char *path, int index, char *name, size_t name_len);
