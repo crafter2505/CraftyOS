@@ -11,6 +11,7 @@
 #include "vfs.h"
 #include "userspace.h"
 #include "elf.h"
+#include "user.h"
 
 #include <stddef.h>
 
@@ -70,6 +71,8 @@ void process_init_subsystem(void) {
     kproc->next = process_list;
     process_list = kproc;
     kproc->total_ticks = 0;
+    kproc->uid = 0;
+    kproc->gid = 0;
     fd_table_init(&kproc->fds);
     current_process = kproc;
     struct thread *boot_thread = thread_current();
@@ -101,6 +104,15 @@ struct process *process_create(const char *name, void (*entry)(void *), void *ar
     process_list = proc;
     proc->total_ticks = 0;
 
+    proc->parent = process_current();
+    if (proc->parent) {
+        proc->uid = proc->parent->uid;
+        proc->gid = proc->parent->gid;
+    } else {
+        proc->uid = 0;
+        proc->gid = 0;
+    }
+ 
     fd_table_init(&proc->fds);
 
     struct thread *t = thread_create(name, entry, arg);
@@ -270,6 +282,8 @@ struct process *process_fork(struct syscall_regs *regs) {
     child->next = process_list;
     process_list = child;
     child->total_ticks = 0;
+    child->uid = parent->uid;
+    child->gid = parent->gid;
 
     fd_table_init(&child->fds);
 

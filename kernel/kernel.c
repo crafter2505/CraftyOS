@@ -64,7 +64,7 @@ void _start(struct boot_info *boot_info) {
     terminal_clear();
 
     terminal_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
-    kprintf("CraftyOS v0.18.0");
+    kprintf("CraftyOS v0.19.0");
     terminal_set_color(VGA_WHITE, VGA_BLACK);
     if (boot_info) {
         kprintf(" (UEFI boot)\n");
@@ -113,6 +113,8 @@ void _start(struct boot_info *boot_info) {
     } else {
         kprintf("PCI/AHCI storage unavailable\n");
     }
+
+    user_init_subsystem();
 
     thread_init_subsystem();
     process_init_subsystem();

@@ -12,6 +12,7 @@
 #include "vmm.h"
 #include "io.h"
 #include "userspace.h"
+#include "user.h"
 
 const struct shell_cmd builtins_table[] = {
     { "help",  cmd_help,  "list available commands" },
@@ -33,6 +34,8 @@ const struct shell_cmd builtins_table[] = {
     { "forktest", cmd_forktest, "test fork syscall" },
     { "exectest", cmd_exectest, "test fork+exec" },
     { "run", cmd_run, "run an ELF file at an explicit path" },
+    { "user_dump", cmd_user_dump, "list users" },
+    { "authtest",  cmd_authtest,  "test user authentication" },
     { 0, 0, 0 }
 };
 
@@ -408,5 +411,26 @@ int cmd_run(int argc, char **argv) {
         kprintf("run: exited with status %d\n", (uint64_t)status);
         return 1;
     }
+    return 0;
+}
+
+int cmd_user_dump(int argc, char **argv) {
+    (void)argc; (void)argv;
+    user_dump();
+    return 0;
+}
+
+int cmd_authtest(int argc, char **argv) {
+    if (argc < 3) {
+        kprintf("usage: authtest <name> <password>\n");
+        return 1;
+    }
+    int uid = user_authenticate(argv[1], argv[2]);
+    if (uid < 0) {
+        kprintf("authtest: authentication failed\n");
+        return 1;
+    }
+    kprintf("authtest: %s authenticated (uid=%d)\n",
+            argv[1], (uint64_t)uid);
     return 0;
 }

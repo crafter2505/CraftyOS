@@ -5,25 +5,29 @@
 #include "isr.h"
 #include "vfs.h"
 #include "syscall_regs.h"
+#include "user.h"
+
 
 typedef uint64_t pid_t;
 #define PROCESS_NAME_LEN 16
 
 struct process {
-    pid_t pid;
-    char name[PROCESS_NAME_LEN];
-    uint32_t state;
-    uint32_t _pad;
-    uint64_t pml4_phys;
-    uint64_t last_code_phys;
-    uint32_t exit_status;
-    uint32_t exit_called;
-    struct thread *waiting_parent_thread;
-    struct thread *threads;
-    struct fd_table fds;
-    struct process *parent;
-    struct process *next;
-    uint64_t total_ticks;
+    pid_t       pid;
+    char        name[PROCESS_NAME_LEN];
+    uint32_t    state;
+    uint32_t    _pad;
+    uint64_t    pml4_phys;
+    uint64_t    last_code_phys;
+    uint32_t    exit_status;
+    uint32_t    exit_called;
+    struct      thread *waiting_parent_thread;
+    struct      thread *threads;
+    struct      fd_table fds;
+    struct      process *parent;
+    struct      process *next;
+    uint64_t    total_ticks;
+    uid_t       uid;
+    gid_t       gid;
 };
 
 #define FF_RAX     0
