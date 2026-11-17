@@ -36,6 +36,9 @@ const struct shell_cmd builtins_table[] = {
     { "run", cmd_run, "run an ELF file at an explicit path" },
     { "user_dump", cmd_user_dump, "list users" },
     { "authtest",  cmd_authtest,  "test user authentication" },
+    { "whoami",      cmd_whoami,      "print current user" },
+    { "id",          cmd_id,          "print uid and gid" },
+    { "setuid_test", cmd_setuid_test, "test setuid (debug)" },    
     { 0, 0, 0 }
 };
 
@@ -432,5 +435,54 @@ int cmd_authtest(int argc, char **argv) {
     }
     kprintf("authtest: %s authenticated (uid=%d)\n",
             argv[1], (uint64_t)uid);
+    return 0;
+}
+
+int cmd_whoami(int argc, char **argv) {
+    (void)argc; (void)argv;
+    struct cred *c = current_cred();
+    struct user *u = user_lookup_uid(c->euid);
+    if (!u) {
+        kprintf("uid=%d (unknown)\n", (uint64_t)c->euid);
+        return 1;
+    }
+    kprintf("%s\n", u->name);
+    return 0;
+}
+
+int cmd_id(int argc, char **argv) {
+    (void)argc; (void)argv;
+    struct cred *c = current_cred();
+    kprintf("uid=%d euid=%d gid=%d egid=%d\n",
+            (uint64_t)c->ruid, (uint64_t)c->euid,
+            (uint64_t)c->rgid, (uint64_t)c->egid);
+    return 0;
+}
+
+int cmd_setuid_test(int argc, char **argv) {
+    if (argc < 2) {
+        kprintf("usage: setuid_test <uid>\n");
+        return 1;
+    }
+    uid_t new_uid = 0;
+    const char *s = argv[1];
+    while (*s >= '0' && *s <= '9') {
+        new_uid = new_uid * 10 + (uid_t)(*s - '0');
+        s++;
+    }
+
+    struct cred *c = current_cred();
+    if (c->euid == 0) {
+        c->ruid = new_uid;
+        c->euid = new_uid;
+        c->suid = new_uid;
+    } else if (new_uid == c->ruid || new_uid == c->suid) {
+        c->euid = new_uid;
+    } else {
+        kprintf("setuid: permission denied (not root, uid != ruid/suid)\n");
+        return 1;
+    }
+    kprintf("setuid: ruid=%d euid=%d suid=%d\n",
+            (uint64_t)c->ruid, (uint64_t)c->euid, (uint64_t)c->suid);
     return 0;
 }

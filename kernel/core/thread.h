@@ -1,6 +1,8 @@
 #ifndef THREAD_H
 #define THREAD_H
+
 #include "types.h"
+#include "cred.h"
 
 #define THREAD_READY        0
 #define THREAD_RUNNING      1
@@ -64,6 +66,8 @@ struct thread {
     struct thread *next_dead;
     uint64_t total_ticks;
     uint64_t wake_at_tick;
+
+    struct cred cred;
 };
 
 void thread_init_subsystem(void);

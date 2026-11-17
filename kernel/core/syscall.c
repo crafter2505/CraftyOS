@@ -11,6 +11,7 @@
 #include "kmalloc.h"
 #include "vfs.h"
 #include "elf.h"
+#include "cred.h"
 
 #include <stddef.h>
 
@@ -393,6 +394,49 @@ void syscall_handler(uint64_t sysno, struct syscall_regs *regs) {
     regs->rax = (uint64_t)ret;
     break;
     }
+
+    case SYS_getuid: {
+        regs->rax = (uint64_t)current_cred()->euid;
+        break;
+    }
+    case SYS_getgid: {
+        regs->rax = (uint64_t)current_cred()->egid;
+        break;
+    }
+    case SYS_setuid: {
+        struct cred *c = current_cred();
+        uid_t new_uid = (uid_t)regs->rdi;
+
+        if (c->euid == 0) {
+            c->ruid = new_uid;
+            c->euid = new_uid;
+            c->suid = new_uid;
+        } else if (new_uid == c->ruid || new_uid == c->suid) {
+            c->euid = new_uid;
+        } else {
+            regs->rax = (uint64_t)-1;
+            break;
+        }
+        regs->rax = 0;
+        break;
+    }
+    case SYS_setgid: {
+        struct cred *c = current_cred();
+        gid_t new_gid = (gid_t)regs->rdi;
+
+        if (c->euid == 0) {
+            c->rgid = new_gid;
+            c->egid = new_gid;
+            c->sgid = new_gid;
+        } else if (new_gid == c->rgid || new_gid == c->sgid) {
+            c->egid = new_gid;
+        } else {
+            regs->rax = (uint64_t)-1;
+            break;
+        }
+        regs->rax = 0;
+        break;
+    }    
 
     default:
         kprintf("  [syscall] unknown syscall %d\n", sysno);

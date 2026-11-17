@@ -5,12 +5,9 @@
 #include "kmalloc.h"
 #include <stddef.h>
 
-_Static_assert(offsetof(struct thread, syscall_stack) == 48,
-               "update THREAD_SYSCALL_STACK in user_entry.asm");
-_Static_assert(offsetof(struct thread, syscall_stack_size) == 56,
-               "update THREAD_SYSCALL_STACK_SIZE in user_entry.asm");
-_Static_assert(offsetof(struct thread, user_continuation) == 208,
-               "expected 208");
+_Static_assert(offsetof(struct thread, syscall_stack) == 48, "update THREAD_SYSCALL_STACK in user_entry.asm");
+_Static_assert(offsetof(struct thread, syscall_stack_size) == 56, "update THREAD_SYSCALL_STACK_SIZE in user_entry.asm");
+_Static_assert(offsetof(struct thread, user_continuation) == 208, "expected 208");
 
 static uint64_t next_thread_id = 1;
 static uint64_t total_threads_created = 0;
@@ -57,6 +54,8 @@ void thread_init_subsystem(void) {
     boot->wake_at_tick = 0;
     current_thread = boot;
     total_threads_created++;
+
+    cred_init_kernel(&boot->cred);
 
     kprintf(" THREAD: boot thread id=%d created\n", (uint64_t)boot->id);
 }
@@ -113,6 +112,8 @@ struct thread *thread_create(const char *name, void (*entry)(void *), void *arg)
     t->entry = entry;
     t->arg = arg;
     t->wake_at_tick = 0;
+
+    cred_copy(&t->cred, current_cred());
 
     uint64_t stack_top = (uint64_t)stack + THREAD_STACK_SIZE;
     stack_top &= ~0xFULL;

@@ -2,9 +2,7 @@
 #define USER_H
 
 #include "types.h"
-
-typedef uint32_t uid_t;
-typedef uint32_t gid_t;
+#include "cred.h"
 
 #define USER_NAME_LEN   32
 #define USER_HOME_LEN   64
@@ -23,17 +21,11 @@ struct user {
 };
 
 void user_init_subsystem(void);
-
 struct user *user_lookup(const char *name);
-
 struct user *user_lookup_uid(uid_t uid);
-
 int user_authenticate(const char *name, const char *password);
-
 struct user *user_current(void);
-
 void user_set_current(struct user *u);
-
 void user_dump(void);
 
 #endif

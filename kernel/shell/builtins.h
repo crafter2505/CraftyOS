@@ -26,5 +26,8 @@ int cmd_exectest    (int argc, char **argv);
 int cmd_run         (int argc, char **argv);
 int cmd_user_dump   (int argc, char **argv);
 int cmd_authtest    (int argc, char **argv);
+int cmd_whoami      (int argc, char **argv);
+int cmd_id          (int argc, char **argv);
+int cmd_setuid_test (int argc, char **argv);
 
 #endif
